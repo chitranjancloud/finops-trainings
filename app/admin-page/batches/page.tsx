@@ -35,6 +35,7 @@ import {
   X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import S3UploadPanel from "@/components/S3UploadPanel";
 import AdminNotificationBadge from "@/components/AdminNotificationBadge";
 import { buildStructuredSharePointFolderPath } from "@/lib/sharepoint";
 
@@ -1232,89 +1233,10 @@ export default function BatchesPage() {
                       ) : null}
 
                       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-                        {contentCategories.map((category) => {
-                          const Icon = category.icon;
-                          const items = inventoryByCategory[category.key] || [];
-                          const isUploading = uploadingCategory === category.key;
-                          const targetPath = [form.courseName, form.name, category.folder].filter(Boolean).join(" / ");
-
-                          return (
-                            <section key={category.key} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-                              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                                <div className="flex gap-3">
-                                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                                    <Icon size={20} />
-                                  </div>
-                                  <div>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      <h2 className="text-lg font-bold text-gray-900">{category.label}</h2>
-                                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${items.length ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>
-                                        {items.length ? "Uploaded" : "Empty"}
-                                      </span>
-                                    </div>
-                                    <p className="mt-1 text-sm text-gray-500">Total Uploaded: {items.length}</p>
-                                  </div>
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => openSharePointPicker(category.key)}
-                                    disabled={!form._id || !form.courseId || inventoryLoading}
-                                    className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 disabled:opacity-50"
-                                  >
-                                    <FolderOpen size={14} />
-                                    Add from SharePoint
-                                  </button>
-                                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-                                    {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                                    Upload
-                                    <input
-                                      type="file"
-                                      accept={category.accept}
-                                      className="hidden"
-                                      disabled={!form._id || !form.courseId || isUploading || inventoryLoading}
-                                      onChange={(event) => handleInventoryFileChange(event, category.key)}
-                                    />
-                                  </label>
-                                </div>
-                              </div>
-
-                              <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
-                                <span className="font-semibold text-gray-900">Target Path:</span> {targetPath || "Link a course and save this batch"}
-                              </div>
-
-                              <div className="mt-4 overflow-hidden rounded-xl border border-gray-200">
-                                <div className="grid grid-cols-[1fr_140px] bg-gray-100 px-3 py-2 text-xs font-bold uppercase tracking-wide text-gray-600">
-                                  <span>Existing Files</span>
-                                  <span>Upload Date</span>
-                                </div>
-                                {inventoryLoading ? (
-                                  <div className="flex items-center justify-center px-3 py-8 text-sm text-gray-500">
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Loading files...
-                                  </div>
-                                ) : items.length ? (
-                                  items.map((item) => (
-                                    <div key={item._id} className="grid grid-cols-[1fr_140px] gap-3 border-t border-gray-200 px-3 py-3 text-sm">
-                                      <div className="min-w-0">
-                                        <p className="truncate font-semibold text-gray-900">{item.fileName}</p>
-                                        <p className="mt-1 truncate text-xs text-gray-500">
-                                          {item.sharePointItemId || "SharePoint item id not available"}
-                                        </p>
-                                      </div>
-                                      <div className="flex items-center gap-1 text-gray-600">
-                                        <CheckCircle2 size={16} className="text-emerald-500" />
-                                        {formatInventoryDate(item.uploadedAt || item.createdAt)}
-                                      </div>
-                                    </div>
-                                  ))
-                                ) : (
-                                  <div className="px-3 py-8 text-center text-sm text-gray-500">No files uploaded yet.</div>
-                                )}
-                              </div>
-                            </section>
-                          );
-                        })}
+                        {contentCategories.map((category) => <div key={category.key} className="min-w-0">
+                          {form._id && form.courseId ? <S3UploadPanel key={[form._id, form.courseId, category.key].join("-")} courseId={form.courseId} batchId={form._id} category={category.key} /> : <p>Save this batch with a linked course before uploading files.</p>}
+                          {(inventoryByCategory[category.key] || []).length > 0 && <details className="mt-3 rounded-xl border bg-gray-50 p-3 text-sm text-gray-600"><summary>Existing SharePoint files ({(inventoryByCategory[category.key] || []).length})</summary><p className="my-2 text-xs">These existing files remain available. New uploads use S3.</p><ul>{(inventoryByCategory[category.key] || []).map((item) => <li key={item._id} className="py-1">{item.fileName} · {formatInventoryDate(item.uploadedAt || item.createdAt)}</li>)}</ul></details>}
+                        </div>)}
                       </div>
 
                       <LegacyBatchContentReadOnly materials={legacyMaterials} />

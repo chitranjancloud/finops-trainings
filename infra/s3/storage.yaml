@@ -1,0 +1,76 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Private S3 MP4 pilot storage. Creates no public website or CDN.
+Parameters:
+  ApplicationOrigin:
+    Type: String
+    Description: Exact HTTPS application origin without trailing slash
+    AllowedPattern: '^https://[a-zA-Z0-9.-]+(:[0-9]+)?$'
+Resources:
+  MediaBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins: [!Ref ApplicationOrigin]
+            AllowedMethods: [GET, HEAD, PUT]
+            AllowedHeaders: [content-type, range, x-amz-checksum-crc32, x-amz-sdk-checksum-algorithm]
+            ExposedHeaders: [ETag, Content-Length, Content-Range, Accept-Ranges]
+            MaxAge: 300
+      LifecycleConfiguration:
+        Rules:
+          - Id: AbortAbandonedMultipartUploads
+            Status: Enabled
+            Prefix: tenant/
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 2
+  MediaPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref MediaBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyPlainHttp
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource: [!GetAtt MediaBucket.Arn, !Sub '${MediaBucket.Arn}/*']
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+  ApplicationStoragePermissions:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Attach only to the application's server identity, never a browser identity
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: [s3:GetObject, s3:GetObjectVersion, s3:PutObject, s3:DeleteObject, s3:DeleteObjectVersion, s3:AbortMultipartUpload, s3:ListMultipartUploadParts]
+            Resource: !Sub '${MediaBucket.Arn}/tenant/*'
+          # HEAD of a nonexistent object needs ListBucket permission to return
+          # 404 rather than 403. The app exposes no bucket-listing endpoint.
+          - Effect: Allow
+            Action: [s3:ListBucket, s3:ListBucketVersions]
+            Resource: !GetAtt MediaBucket.Arn
+Outputs:
+  BucketName:
+    Value: !Ref MediaBucket
+  ServerPolicyArn:
+    Value: !Ref ApplicationStoragePermissions

@@ -1,4 +1,5 @@
 "use client";
+import S3BatchContent from "@/components/S3BatchContent";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -44,6 +45,7 @@ export default function StudentBatchesPage() {
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [loading, setLoading] = useState(true);
+  const [s3LibraryAvailable, setS3LibraryAvailable] = useState(false);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<"materials" | "tests" | "assignments" | "notices" | "faculty">("materials");
   // batchId → { completedCount, totalCount, pct }
@@ -173,18 +175,18 @@ export default function StudentBatchesPage() {
   }, [enrollments, selected]);
 
   return (
-    <main className="dash-page px-6 pt-24 pb-16">
+    <main className="dash-page px-4 pt-24 pb-16 sm:px-6">
       <div className="relative max-w-7xl mx-auto">
         <Link href="/" className="inline-flex items-center gap-2 text-slate-400 hover:text-white mb-8 text-sm transition-colors">
           <ArrowLeft size={16} /> Back to Home
         </Link>
 
-        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-10">
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-8">
           <div>
-            <p className="eyebrow" style={{ color: "var(--brand-400)" }}>Batch Content</p>
-            <h1 className="mt-3 text-4xl md:text-5xl font-black tracking-tight text-white">My Batches</h1>
-            <p className="mt-3 text-slate-400 max-w-2xl text-sm leading-relaxed">
-              Access videos, PDFs, tests, assignments, notices, and faculty shared in your assigned batches.
+            <p className="eyebrow" style={{ color: "var(--brand-400)" }}>Your classroom</p>
+            <h1 className="mt-2 text-3xl md:text-4xl font-black tracking-tight text-white">My Batches</h1>
+            <p className="mt-2 text-slate-400 max-w-2xl text-sm leading-relaxed">
+              Your lessons, resources, and batch updates, all in one place.
             </p>
           </div>
           <Link href="/student/chats" className="inline-flex items-center gap-2 rounded-xl bg-white/[0.06] border border-white/[0.08] px-5 py-2.5 text-sm font-semibold text-slate-300 hover:bg-white/[0.10] hover:text-white transition-all">
@@ -200,33 +202,32 @@ export default function StudentBatchesPage() {
           <Empty text="No enrolled content is available yet." />
         ) : (
           <div className="space-y-8">
-            {recordedCourses.length > 0 && <RecordedCoursesSection items={recordedCourses} auth={auth} />}
+            {recordedCourses.length > 0 && (batches.length ? <details className="group rounded-2xl border border-white/[0.08] bg-white/[0.025]"><summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-slate-300">Recorded courses <span className="ml-2 rounded-full bg-white/10 px-2 py-0.5 text-xs text-slate-400">{recordedCourses.length}</span><span className="ml-3 text-xs font-normal text-slate-500">Browse your self-paced courses</span></summary><div className="px-3 pb-3"><RecordedCoursesSection items={recordedCourses} auth={auth} /></div></details> : <RecordedCoursesSection items={recordedCourses} auth={auth} />)}
             {pendingLiveEnrollments.length > 0 && <PendingLiveSection items={pendingLiveEnrollments} />}
             {batches.length > 0 && (
-          <div className="grid grid-cols-1 xl:grid-cols-[340px_1fr] gap-6">
+          <div className="grid grid-cols-1 xl:grid-cols-[260px_minmax(0,1fr)] gap-5">
             {/* Batch selector sidebar */}
-            <aside className="space-y-3">
+            <aside className="min-w-0 space-y-3"><p className="px-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Your batches · {batches.length}</p>
               {batches.map((batch) => {
                 const prog = batchProgress[String(batch._id)];
                 return (
                 <button
                   key={batch._id}
+                  aria-pressed={selected?._id === batch._id}
                   onClick={() => { setSelectedId(batch._id); setActiveTab("materials"); }}
                   className={`w-full text-left rounded-2xl border p-5 transition-all duration-200 ${
                     selected?._id === batch._id
-                      ? "bg-gradient-to-r from-[#2563eb] to-[#1a4fd6] border-blue-400/60 text-white shadow-lg shadow-blue-900/20"
+                      ? "bg-blue-500/10 border-blue-400/40 text-white shadow-lg shadow-black/5"
                       : "bg-white/[0.04] border-white/[0.08] hover:border-white/20 hover:bg-white/[0.07] text-slate-300"
                   }`}
                 >
-                  <p className="text-xs uppercase tracking-widest opacity-75">{batch.code}</p>
+                  <p className="break-all text-[10px] font-semibold uppercase tracking-widest text-blue-300">{batch.code}</p>
                   <h2 className="text-xl font-bold mt-2">{batch.name}</h2>
                   <p className="text-sm opacity-75 mt-1">{batch.courseName}</p>
-                  <div className="grid grid-cols-4 gap-2 mt-4 text-center">
-                    <Mini label="Videos" value={active(batch.materials?.filter((m: any) => m.type === "video")).length} />
+                  {(active(batch.tests).length > 0 || active(batch.assignments).length > 0) && <div className="grid grid-cols-2 gap-2 mt-4 text-center">
                     <Mini label="Tests" value={active(batch.tests).length} />
                     <Mini label="Tasks" value={active(batch.assignments).length} />
-                    <Mini label="Docs" value={active(batch.materials?.filter((m: any) => m.type !== "video")).length} />
-                  </div>
+                  </div>}
                   {/* Real-time per-batch completion */}
                   {prog && prog.totalCount > 0 && (
                     <div className="mt-4">
@@ -256,18 +257,18 @@ export default function StudentBatchesPage() {
 
             {/* Batch detail */}
             {selected && (
-              <section className="rounded-2xl border border-white/[0.08] bg-white/[0.04] overflow-hidden">
+              <section className="min-w-0 rounded-2xl border border-white/[0.08] bg-[#101827] overflow-hidden shadow-xl shadow-black/10">
                 {/* Header */}
-                <div className="bg-gradient-to-br from-[#2563eb]/15 via-[#7c3aed]/08 to-transparent p-8 border-b border-white/[0.06]">
+                <div className="bg-gradient-to-br from-blue-500/10 to-transparent p-5 sm:p-6 border-b border-white/[0.06]">
                   <p className="eyebrow mb-3" style={{ color: "var(--brand-400)" }}>{selected.code}</p>
-                  <h2 className="text-3xl font-black leading-tight text-white">{selected.name}</h2>
+                  <h2 className="text-2xl font-bold leading-tight tracking-tight text-white">{selected.name}</h2>
                   <div className="mt-4 flex flex-wrap gap-2.5 text-sm text-slate-400">
                     <span className="inline-flex items-center gap-2 rounded-full bg-white/[0.07] border border-white/[0.08] px-4 py-2">
                       <BookOpen size={16} /> {selected.courseName || selectedEnrollment?.courseName || "Course"}
                     </span>
-                    <span className="inline-flex items-center gap-2 rounded-full bg-white/[0.07] border border-white/[0.08] px-4 py-2">
+                    {selected.startDate && <span className="inline-flex items-center gap-2 rounded-full bg-white/[0.07] border border-white/[0.08] px-4 py-2">
                       <CalendarDays size={16} /> {formatDate(selected.startDate)}
-                    </span>
+                    </span>}
                   </div>
                   {selected.description && <p className="mt-4 text-slate-400">{selected.description}</p>}
                 </div>
@@ -276,7 +277,7 @@ export default function StudentBatchesPage() {
                 <div className="border-b border-white/[0.06] px-6">
                   <div className="flex gap-0 overflow-x-auto scrollbar-hide">
                     {[
-                      { key: "materials", label: "Materials", count: active(selected.materials || []).length, icon: <Package size={14} /> },
+                      { key: "materials", label: "Learning library", count: null, icon: <BookOpen size={14} /> },
                       { key: "tests", label: "Tests", count: active(selected.tests).length, icon: <GraduationCap size={14} /> },
                       { key: "assignments", label: "Assignments", count: active(selected.assignments).length, icon: <FileText size={14} /> },
                       { key: "notices", label: "Notices", count: active(selected.notices).length, icon: <Megaphone size={14} /> },
@@ -293,18 +294,21 @@ export default function StudentBatchesPage() {
                       >
                         {tab.icon}
                         {tab.label}
-                        <span className={`rounded-full px-1.5 py-0.5 text-xs ${activeTab === tab.key ? "bg-blue-500/20 text-blue-400" : "bg-white/[0.07] text-slate-500"}`}>
+                        {tab.count !== null && <span className={`rounded-full px-1.5 py-0.5 text-xs ${activeTab === tab.key ? "bg-blue-500/20 text-blue-400" : "bg-white/[0.07] text-slate-500"}`}>
                           {tab.count}
-                        </span>
+                        </span>}
                       </button>
                     ))}
                   </div>
                 </div>
 
                 {/* Tab Content */}
-                <div className="p-8">
+                <div className="p-4 sm:p-6">
                   {activeTab === "materials" && (
+                    <>
+                    <S3BatchContent key={selected._id} batchId={selected._id} onAvailabilityChange={setS3LibraryAvailable} />
                     <MaterialsSection
+                      hideEmpty={s3LibraryAvailable}
                       materials={active(selected.materials || [])}
                       batchId={selected._id}
                       auth={auth}
@@ -312,6 +316,7 @@ export default function StudentBatchesPage() {
                         setBatchProgress((prev) => ({ ...prev, [batchId]: { completedCount, totalCount, pct } }));
                       }}
                     />
+                    </>
                   )}
 
                   {activeTab === "tests" && (
@@ -709,11 +714,13 @@ function MaterialsSection({
   batchId,
   auth,
   onProgressUpdate,
+  hideEmpty = false,
 }: {
   materials: any[];
   batchId: string;
   auth: () => any;
   onProgressUpdate?: (batchId: string, completedCount: number, totalCount: number, pct: number) => void;
+  hideEmpty?: boolean;
 }) {
   const [openCat, setOpenCat] = useState<MatCategory | null>(null);
   const [search, setSearch] = useState("");
@@ -838,6 +845,7 @@ function MaterialsSection({
   }
 
   if (!structuredLoading && displayMaterials.length === 0) {
+    if (hideEmpty) return null;
     return (
       <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-white/15 py-16 px-6 text-center gap-3">
         <div className="text-4xl">📂</div>

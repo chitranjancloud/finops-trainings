@@ -10,6 +10,7 @@ node_modules/
 
 # Build and output
 .next/
+.next-s3-check/
 /out
 /build
 dist/
@@ -36,3 +37,6 @@ lerna-debug.log*
 
 # OS
 Thumbs.db
+
+# Generated TypeScript cache
+*.tsbuildinfo

@@ -21,7 +21,7 @@ export default function WhatsAppButton() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
-  if (pathname.startsWith("/admin-page")) return null;
+  if (pathname.startsWith("/admin-page") || pathname === "/student/batches") return null;
 
   const message = getPageMessage(pathname);
   const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;

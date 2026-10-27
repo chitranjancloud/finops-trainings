@@ -196,7 +196,7 @@ export default function Chatbot() {
     },
   ]);
 
-  const shouldHide = pathname.startsWith("/admin-page");
+  const shouldHide = pathname.startsWith("/admin-page") || pathname === "/student/batches";
 
   useEffect(() => {
     if (shouldHide) return;

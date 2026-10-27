@@ -175,6 +175,9 @@ export async function POST(req: Request) {
   try {
     const formData = await req.formData();
     const file = formData.get("file");
+    if (formData.get("batchId") && ["video", "pdf", "study-material", "assignment"].includes(String(formData.get("contentCategory") || ""))) {
+      return NextResponse.json({ success: false, message: "Batch learning-file uploads now use S3. Refresh the batch page and use its S3 upload controls." }, { status: 409 });
+    }
     const requestedFolder = String(formData.get("folder") || "finops/admin");
     const structuredFolder = getStructuredFolder(formData);
     const folder = structuredFolder || requestedFolder;
