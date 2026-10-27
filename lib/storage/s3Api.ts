@@ -276,6 +276,8 @@ export const assetList: Handler = async (req) => {
     filter.status = status;
   }
   const page = Math.max(1, Math.min(1000, Number.parseInt(params.get("page") || "1", 10) || 1));
+  const search = params.get("search")?.trim().slice(0, 200);
+  if (search) filter.originalFilename = { $regex: search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" };
   const limit = 20;
   const rows = await S3Asset.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit + 1);
   const visible = rows.slice(0, limit);

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
@@ -22,6 +22,7 @@ import {
   Plus,
   Save,
   Search,
+  Settings,
   Share2,
   Trash2,
   Trophy,
@@ -241,6 +242,15 @@ export default function BatchesPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [form, setForm] = useState<Batch>(emptyBatch);
   const [selectedId, setSelectedId] = useState("");
+  const batchListRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const list = batchListRef.current;
+    const selected = list?.querySelector<HTMLElement>('[aria-current="true"]');
+    if (list && selected) {
+      const offset = selected.getBoundingClientRect().top - list.getBoundingClientRect().top;
+      if (offset < 0 || offset + selected.offsetHeight > list.clientHeight) list.scrollTo({ top: list.scrollTop + offset, behavior: "smooth" });
+    }
+  }, [selectedId]);
   const [search, setSearch] = useState("");
   const [courseFilter, setCourseFilter] = useState("");
   const [loading, setLoading] = useState(true);
@@ -271,7 +281,7 @@ export default function BatchesPage() {
   } | null>(null);
   const [sharePointFiles, setSharePointFiles] = useState<any[]>([]);
   const [pickerLoading, setPickerLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<"content" | "tests" | "assignments" | "notices" | "faculty" | "students">("content");
+  const [activeTab, setActiveTab] = useState<"content" | "tests" | "assignments" | "notices" | "faculty" | "students" | "settings">("content");
 
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
@@ -872,7 +882,7 @@ export default function BatchesPage() {
   return (
     <div className="min-h-screen bg-[#f4f7fb] flex">
       {/* Sidebar */}
-      <aside className="w-[250px] bg-white border-r border-gray-200 flex flex-col justify-between fixed h-screen overflow-y-auto">
+      <aside className="w-[250px] bg-white border-r border-gray-200 flex-col justify-between fixed top-0 left-0 h-screen overflow-y-auto hidden lg:flex">
         <div>
           <div className="px-8 py-10">
             <h1 className="text-4xl font-bold text-blue-500">FinOps</h1>
@@ -888,28 +898,22 @@ export default function BatchesPage() {
             <SidebarLink href="/admin-page/people" icon={<Users size={22} />} text="People" />
           </nav>
         </div>
-        <div className="p-5">
-          <div className="bg-gradient-to-r from-[#2563eb] to-[#1a4fd6] rounded-3xl p-5 text-white">
-            <HelpCircle size={24} />
-            <h2 className="text-xl font-semibold mt-3">Batch Control</h2>
-            <p className="text-sm opacity-90 mt-2">Multiple batches per course. Batch-specific access control.</p>
-          </div>
-        </div>
+        <div className="border-t border-slate-100 p-4"><details className="rounded-xl p-3 text-sm text-slate-500"><summary className="flex cursor-pointer items-center gap-2"><HelpCircle size={18} />Batch help</summary><p className="mt-3 leading-6">Select a batch to manage content and students. Open Settings to update batch details and access rules.</p></details></div>
       </aside>
 
-      <main className="flex-1 ml-[250px] p-8 overflow-y-auto">
+      <main className="flex-1 min-w-0 lg:ml-[250px] p-4 lg:p-8 overflow-y-auto">
         {/* Header */}
-        <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6 mb-8">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-6">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.28em] text-[#4d8bff]">Batch Management System</p>
-            <h1 className="text-5xl font-bold text-gray-900 mt-3">Batches</h1>
-            <p className="text-gray-500 mt-3 text-lg">
-              Create multiple batches per course. Each batch has its own students, content, tests, and access control.
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900 mt-2">Batches</h1>
+            <p className="text-slate-500 mt-2 text-sm">
+              Manage your batches, students, and learning resources in one place.
             </p>
           </div>
           <button
             onClick={() => setShowNewBatchModal(true)}
-            className="bg-gradient-to-r from-[#2563eb] to-[#1a4fd6] hover:bg-blue-600 transition text-white px-7 py-4 rounded-2xl font-semibold flex items-center gap-3 w-fit"
+            className="bg-gradient-to-r from-[#2563eb] to-[#1a4fd6] hover:bg-blue-600 transition text-white px-5 py-3 rounded-xl font-semibold flex items-center gap-3 w-fit"
           >
             <Plus size={20} />
             New Batch
@@ -917,18 +921,19 @@ export default function BatchesPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
           <StatCard title="Total Batches" value={batches.length} />
           <StatCard title="Courses with Batches" value={groupedByCourse.length} />
           <StatCard title="Total Tests" value={batches.reduce((s, b) => s + b.tests.length, 0)} />
           <StatCard title="Total Assignments" value={batches.reduce((s, b) => s + b.assignments.length, 0)} />
         </div>
 
-        <div className="grid grid-cols-1 2xl:grid-cols-[380px_1fr] gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)] gap-5 items-start">
           {/* Left Panel: Batch List */}
-          <section className="space-y-4">
+          <section className="space-y-3 lg:sticky lg:top-6">
+            <div className="flex items-center justify-between px-1"><h2 className="text-sm font-semibold text-slate-700">Your batches</h2><span className="rounded-full bg-slate-200/60 px-2 py-0.5 text-xs text-slate-600">{filteredBatches.length}</span></div>
             {/* Search and Filter */}
-            <div className="bg-white border border-gray-200 rounded-3xl p-4 shadow-sm space-y-3">
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-3">
               <div className="flex items-center gap-3">
                 <Search size={18} className="text-gray-400" />
                 <input
@@ -954,7 +959,7 @@ export default function BatchesPage() {
             {loading ? (
               <div className="bg-white rounded-3xl border border-gray-200 p-10 text-center text-gray-500">Loading batches...</div>
             ) : filteredBatches.length > 0 ? (
-              <div className="space-y-3">
+              <div ref={batchListRef} className="space-y-2 max-h-[65vh] overflow-y-auto pr-1">
                 {filteredBatches.map((batch) => {
                   const studentCount = enrollments.filter(
                     (e) => (e.learningMode || "recorded") === "live" && (e.batchId === batch._id || (e.batchName === batch.name && !e.batchId))
@@ -963,29 +968,20 @@ export default function BatchesPage() {
                     <button
                       key={batch._id}
                       onClick={() => selectBatch(batch)}
-                      className={`w-full text-left rounded-3xl border p-5 shadow-sm transition ${
+                      aria-current={selectedId === batch._id ? "true" : undefined}
+                      className={`w-full text-left rounded-xl border p-4 transition focus-visible:outline-2 focus-visible:outline-blue-600 ${
                         selectedId === batch._id
-                          ? "bg-gray-900 border-gray-900 text-white"
-                          : "bg-white border-gray-200 text-gray-900 hover:border-blue-300"
+                          ? "bg-blue-50 border-blue-400 text-slate-900 ring-1 ring-blue-100"
+                          : "bg-white border-gray-200 text-gray-900 hover:border-blue-300 hover:bg-slate-50"
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <h2 className="text-lg font-bold truncate">{batch.name}</h2>
-                          <p className={`text-sm mt-0.5 truncate ${selectedId === batch._id ? "text-gray-300" : "text-gray-500"}`}>
-                            {batch.courseName || "No course"}
-                          </p>
-                        </div>
-                        <span className="bg-blue-100 text-[#4d8bff] px-2 py-1 rounded-lg text-xs font-bold flex-none">
-                          {batch.code || "Draft"}
-                        </span>
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="min-w-0 break-words text-base font-semibold leading-6">{batch.name}</h3>
+                        <span className={"mt-1.5 h-2 w-2 shrink-0 rounded-full " + (batch.isActive ? "bg-emerald-500" : "bg-slate-300")} title={batch.isActive ? "Active" : "Hidden"} />
                       </div>
-                      <div className="grid grid-cols-4 gap-2 mt-4 text-center">
-                        <MiniStat label="Students" value={studentCount} dark={selectedId === batch._id} />
-                        <MiniStat label="Tests" value={batch.tests.length} dark={selectedId === batch._id} />
-                        <MiniStat label="Tasks" value={batch.assignments.length} dark={selectedId === batch._id} />
-                        <MiniStat label="Materials" value={batch.materials.length} dark={selectedId === batch._id} />
-                      </div>
+                      <p className="mt-1 text-sm text-slate-500">{batch.courseName || "No course"}</p>
+                      <p className="mt-2 break-all font-mono text-[11px] tracking-wide text-slate-500">{batch.code || "Draft"}</p>
+                      <div className="mt-3 flex items-center justify-between border-t border-slate-200/70 pt-3 text-xs text-slate-600"><span>{studentCount} {studentCount === 1 ? "student" : "students"}</span><span className={selectedId === batch._id ? "font-semibold text-blue-700" : "text-slate-500"}>{selectedId === batch._id ? "Selected" : batch.isActive ? "Active" : "Hidden"}</span></div>
                     </button>
                   );
                 })}
@@ -1005,52 +1001,73 @@ export default function BatchesPage() {
           </section>
 
           {/* Right Panel: Batch Detail */}
-          <section className="bg-white rounded-[32px] border border-gray-200 shadow-sm overflow-hidden">
+          <section className="min-w-0 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
             {selectedBatch ? (
               <>
                 {/* Batch Header */}
-                <div className="bg-gray-950 text-white p-8">
+                <div className="bg-white text-slate-900 p-5 border-b border-slate-100">
                   <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-6">
                     <div className="flex-1 min-w-0">
                       <p className="text-[#4d8bff] text-xs font-black uppercase tracking-[0.3em]">
                         {form.courseName || "Batch Detail"}
                       </p>
-                      <input
-                        value={form.name}
-                        onChange={(e) => setForm({ ...form, name: e.target.value })}
-                        className="mt-3 w-full bg-transparent text-3xl font-black outline-none border-b border-white/10 pb-2"
-                        placeholder="Batch name"
-                      />
-                      <p className="text-gray-400 mt-3 text-sm">
-                        {totalStudents} student(s) · {form.materials.length} material(s) · {form.tests.length} test(s)
+                      <h2 className="mt-2 text-2xl font-bold">{form.name}</h2>
+                      <p className="text-slate-500 mt-2 text-sm">
+                        {totalStudents} {totalStudents === 1 ? "student" : "students"} · {form.isActive ? "Visible to students" : "Hidden from students"}
                       </p>
                     </div>
-                    <div className="flex flex-wrap gap-3">
-                      {form._id && (
-                        <button
-                          onClick={deleteBatch}
-                          className="bg-red-500/15 text-red-200 border border-red-400/20 px-5 py-3 rounded-2xl font-bold flex items-center gap-2"
-                        >
-                          <Trash2 size={16} />
-                          Delete
-                        </button>
-                      )}
+                    <div className="flex flex-wrap items-center gap-3">
+                      {JSON.stringify(form) !== JSON.stringify(selectedBatch) && <span className="text-xs font-medium text-amber-700">Unsaved changes</span>}
                       <button
                         onClick={saveBatch}
-                        disabled={saving}
-                        className="bg-gradient-to-r from-[#2563eb] to-[#1a4fd6] hover:bg-blue-400 disabled:bg-[#0a2f52] px-6 py-3 rounded-2xl font-black flex items-center gap-2"
+                        disabled={saving || JSON.stringify(form) === JSON.stringify(selectedBatch)}
+                        className="text-white bg-gradient-to-r from-[#2563eb] to-[#1a4fd6] hover:bg-blue-400 disabled:from-slate-200 disabled:to-slate-200 disabled:text-slate-500 disabled:cursor-not-allowed px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2"
                       >
                         <Save size={16} />
-                        {saving ? "Saving..." : "Save Batch"}
+                        {saving ? "Saving..." : "Save changes"}
                       </button>
                     </div>
                   </div>
                 </div>
 
-                {/* Basic Info */}
-                <div className="p-6 border-b border-gray-100">
-                  <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
-                    <Field label="Batch Code">
+                {/* Tabs */}
+                <div className="border-b border-gray-100 px-6">
+                  <div className="flex flex-wrap gap-x-1">
+                    {[
+                      { key: "content", label: "Content", count: null, icon: <Package size={15} /> },
+                      { key: "students", label: "Students", count: totalStudents, icon: <Users size={15} /> },
+                      { key: "tests", label: "Tests", count: form.tests.length, icon: <GraduationCap size={15} /> },
+                      { key: "assignments", label: "Assignments", count: form.assignments.length, icon: <FileText size={15} /> },
+                      { key: "notices", label: "Notices", count: form.notices.length, icon: <Megaphone size={15} /> },
+                      { key: "settings", label: "Settings", count: null, icon: <Settings size={15} /> },
+                      { key: "faculty", label: "Faculty", count: form.faculty.length, icon: <UserCog size={15} /> },
+                    ].map((tab) => (
+                      <button
+                        key={tab.key}
+                        onClick={() => setActiveTab(tab.key as any)}
+                        className={`flex items-center gap-2 px-3 py-3 text-sm font-semibold border-b-2 transition whitespace-nowrap ${
+                          activeTab === tab.key
+                            ? "border-blue-500 text-[#4d8bff]"
+                            : "border-transparent text-gray-500 hover:text-gray-700"
+                        }`}
+                      >
+                        {tab.icon}
+                        {tab.label}
+                        {tab.count !== null && <span className={`rounded-full px-1.5 py-0.5 text-xs ${activeTab === tab.key ? "bg-blue-100 text-[#4d8bff]" : "bg-gray-100 text-gray-500"}`}>
+                          {tab.count}
+                        </span>}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Tab Content */}
+                <div className="p-4 lg:p-6">
+{activeTab === "settings" && (
+                <div className="space-y-6"><div><h3 className="text-xl font-bold">Batch settings</h3><p className="mt-1 text-sm text-slate-500">Manage general details and student access.</p></div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Field label="Batch name"><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="field" /></Field>
+<Field label="Batch Code">
                       <input
                         value={form.code}
                         onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
@@ -1098,7 +1115,7 @@ export default function BatchesPage() {
                         className="field"
                       />
                     </Field>
-                    <div className="xl:col-span-3">
+                    <div className="md:col-span-2">
                       <Field label="Description">
                         <input
                           value={form.description}
@@ -1109,40 +1126,9 @@ export default function BatchesPage() {
                       </Field>
                     </div>
                   </div>
-                </div>
+<div className="rounded-xl border border-red-200 p-5"><h3 className="font-semibold text-red-700">Delete batch</h3><p className="mt-1 mb-4 text-sm text-slate-600">Permanently remove this batch. Review carefully before continuing.</p><button onClick={deleteBatch} className="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700">Delete batch</button></div></div>
 
-                {/* Tabs */}
-                <div className="border-b border-gray-100 px-6">
-                  <div className="flex gap-1 overflow-x-auto">
-                    {[
-                      { key: "content", label: "Content", count: inventoryCount, icon: <Package size={15} /> },
-                      { key: "students", label: "Students", count: totalStudents, icon: <Users size={15} /> },
-                      { key: "tests", label: "Tests", count: form.tests.length, icon: <GraduationCap size={15} /> },
-                      { key: "assignments", label: "Assignments", count: form.assignments.length, icon: <FileText size={15} /> },
-                      { key: "notices", label: "Notices", count: form.notices.length, icon: <Megaphone size={15} /> },
-                      { key: "faculty", label: "Faculty", count: form.faculty.length, icon: <UserCog size={15} /> },
-                    ].map((tab) => (
-                      <button
-                        key={tab.key}
-                        onClick={() => setActiveTab(tab.key as any)}
-                        className={`flex items-center gap-2 px-4 py-4 text-sm font-semibold border-b-2 transition whitespace-nowrap ${
-                          activeTab === tab.key
-                            ? "border-blue-500 text-[#4d8bff]"
-                            : "border-transparent text-gray-500 hover:text-gray-700"
-                        }`}
-                      >
-                        {tab.icon}
-                        {tab.label}
-                        <span className={`rounded-full px-1.5 py-0.5 text-xs ${activeTab === tab.key ? "bg-blue-100 text-[#4d8bff]" : "bg-gray-100 text-gray-500"}`}>
-                          {tab.count}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Tab Content */}
-                <div className="p-6">
+)}
                   {activeTab === "content" && (
                     <div className="space-y-6">
                       {!form._id || !form.courseId ? (
@@ -1232,12 +1218,8 @@ export default function BatchesPage() {
                         </div>
                       ) : null}
 
-                      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-                        {contentCategories.map((category) => <div key={category.key} className="min-w-0">
-                          {form._id && form.courseId ? <S3UploadPanel key={[form._id, form.courseId, category.key].join("-")} courseId={form.courseId} batchId={form._id} category={category.key} /> : <p>Save this batch with a linked course before uploading files.</p>}
-                          {(inventoryByCategory[category.key] || []).length > 0 && <details className="mt-3 rounded-xl border bg-gray-50 p-3 text-sm text-gray-600"><summary>Existing SharePoint files ({(inventoryByCategory[category.key] || []).length})</summary><p className="my-2 text-xs">These existing files remain available. New uploads use S3.</p><ul>{(inventoryByCategory[category.key] || []).map((item) => <li key={item._id} className="py-1">{item.fileName} · {formatInventoryDate(item.uploadedAt || item.createdAt)}</li>)}</ul></details>}
-                        </div>)}
-                      </div>
+                      {form._id && form.courseId && <S3UploadPanel key={form._id + form.courseId} courseId={form.courseId} batchId={form._id} library />}
+                      {inventory.length > 0 && <details className="rounded-xl border p-4 text-sm"><summary>Existing SharePoint files ({inventory.length})</summary>{inventory.map(item => <p key={item._id} className="py-2">{item.fileName}</p>)}</details>}
 
                       <LegacyBatchContentReadOnly materials={legacyMaterials} />
                     </div>
@@ -2495,9 +2477,9 @@ function SidebarLink({ href, icon, text, active = false, badge = null }: any) {
 
 function StatCard({ title, value }: { title: string; value: number }) {
   return (
-    <div className="bg-white rounded-3xl border border-gray-200 p-6 shadow-sm">
-      <p className="text-xs uppercase tracking-widest text-gray-400">{title}</p>
-      <p className="text-4xl font-bold text-gray-900 mt-3">{value}</p>
+    <div className="bg-white rounded-2xl border border-slate-200 px-5 py-4">
+      <p className="text-xs font-medium text-slate-500">{title}</p>
+      <p className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">{value}</p>
     </div>
   );
 }
@@ -2514,7 +2496,7 @@ function MiniStat({ label, value, dark }: { label: string; value: number; dark?:
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-xs font-bold uppercase tracking-widest text-gray-400">{label}</span>
+      <span className="text-sm font-medium text-slate-600">{label}</span>
       <div className="mt-1.5">{children}</div>
     </label>
   );
