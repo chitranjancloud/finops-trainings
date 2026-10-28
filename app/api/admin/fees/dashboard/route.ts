@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import {
   extractAdminCredentials,
-  getLedgerSummary,
+  derivePaymentStatus,
   jsonError,
 } from "@/lib/adminFees";
 import { verifyTenantAdmin } from "@/lib/auth/tenantSession";
@@ -10,6 +10,7 @@ import { connectDB } from "@/lib/mongodb";
 import { withTenantContext, withTenantScope } from "@/lib/platform/runtime";
 import FeeAccount from "@/models/FeeAccount";
 import FeePayment from "@/models/FeePayment";
+import { COUNTABLE_RECEIPT_STATUSES, calculateRemaining } from "@/lib/fees";
 
 export const runtime = "nodejs";
 
@@ -37,10 +38,28 @@ export const GET = withTenantContext(async (req: Request) => {
       );
     }
 
-    const accounts = await FeeAccount.find(withTenantScope()).lean();
-    const pendingApprovalCount = await FeePayment.countDocuments(
-      withTenantScope({ receiptStatus: "PENDING_APPROVAL" })
-    );
+    // The overview badge needs a count, not every student's financial ledger.
+    if (searchParams.get("view") === "approvals") {
+      const pendingApprovalCount = await FeePayment.countDocuments(
+        withTenantScope({ receiptStatus: "PENDING_APPROVAL" })
+      );
+      return NextResponse.json({ success: true, dashboard: { pendingApprovalCount } });
+    }
+
+    // Fetch ledger totals once for the tenant, instead of one round trip per account.
+    const [accounts, ledgers] = await Promise.all([
+      FeeAccount.find(withTenantScope()).select("enrollmentId totalFee").lean(),
+      FeePayment.aggregate<{ _id: string; totalPaid: number; pendingCount: number }>([
+        { $match: withTenantScope({ receiptStatus: { $in: [...COUNTABLE_RECEIPT_STATUSES] } }) },
+        { $group: {
+          _id: "$enrollmentId",
+          totalPaid: { $sum: "$amount" },
+          pendingCount: { $sum: { $cond: [{ $eq: ["$receiptStatus", "PENDING_APPROVAL"] }, 1, 0] } },
+        } },
+      ]),
+    ]);
+    const ledgerByEnrollment = new Map(ledgers.map(ledger => [String(ledger._id), ledger]));
+    const pendingApprovalCount = ledgers.reduce((sum, ledger) => sum + ledger.pendingCount, 0);
 
     let totalFeeAmount = 0;
     let totalPaidAmount = 0;
@@ -50,10 +69,15 @@ export const GET = withTenantContext(async (req: Request) => {
     let unpaidStudents = 0;
 
     for (const account of accounts) {
-      const summary = await getLedgerSummary(
-        String(account.enrollmentId),
-        Number(account.totalFee || 0)
-      );
+      const ledger = ledgerByEnrollment.get(String(account.enrollmentId));
+      const totalFee = Number(account.totalFee || 0);
+      const totalPaid = Number(ledger?.totalPaid || 0);
+      const summary = {
+        totalFee,
+        totalPaid,
+        remainingAmount: calculateRemaining(totalFee, totalPaid),
+        paymentStatus: derivePaymentStatus(totalFee, totalPaid, ledger?.pendingCount || 0),
+      };
 
       totalFeeAmount += summary.totalFee;
       totalPaidAmount += summary.totalPaid;

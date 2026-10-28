@@ -171,40 +171,9 @@ export default function AdminMeetingsPage() {
 
   return (
     <div className="min-h-screen bg-[#f4f7fb] flex overflow-hidden">
-      <aside className="w-[250px] bg-white border-r border-gray-200 fixed h-screen overflow-y-auto flex flex-col justify-between">
-        <div>
-          <div className="px-8 py-10">
-            <h1 className="text-4xl font-bold text-blue-500">FinOps</h1>
-          </div>
-          <nav className="px-4 space-y-2">
-            <SidebarLink href="/admin-page" icon={<BookOpen size={22} />} text="Courses" />
-            <SidebarLink href="/admin-page/batches" icon={<Briefcase size={22} />} text="Batches" />
-            <SidebarLink href="/admin-page/notifications" icon={<Bell size={22} />} text="Notifications" badge={<AdminNotificationBadge />} />
-            <SidebarLink href="/admin-page/content" icon={<FileText size={22} />} text="Content" />
-            <SidebarLink href="/admin-page/chats" icon={<MessageCircle size={22} />} text="Chats" />
-            <SidebarLink href="/admin-page/people" icon={<Users size={22} />} text="People" />
-            <Link
-              href="/admin-page/meetings"
-              className="w-full flex items-center gap-4 bg-blue-100 text-blue-600 px-5 py-4 rounded-2xl font-medium"
-            >
-              <Link2 size={22} />
-              Teams Meetings
-            </Link>
-            <SidebarLink href="/admin-page#active-students" icon={<BarChart3 size={22} />} text="Reports" />
-          </nav>
-        </div>
-        <div className="p-5">
-          <button
-            onClick={handleLogout}
-            className="w-full bg-red-500 hover:bg-red-600 text-white px-5 py-3 rounded-2xl flex items-center justify-center gap-2"
-          >
-            <LogOut size={18} />
-            Logout
-          </button>
-        </div>
-      </aside>
 
-      <main className="flex-1 ml-[250px] p-10">
+
+      <main className="flex-1  p-10">
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 mb-8">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.28em] text-blue-600">

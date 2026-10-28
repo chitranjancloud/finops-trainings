@@ -121,11 +121,11 @@ export default function StudentReportPage() {
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-10">
             <div>
               <Link
-                href="/"
+                href="/student"
                 className="inline-flex items-center gap-2 text-sm text-slate-300 hover:text-white mb-6"
               >
                 <ArrowLeft size={18} />
-                Back to Home
+                Back to Dashboard
               </Link>
               <p className="text-xs font-black uppercase tracking-[0.32em] text-blue-400">
                 Student Performance

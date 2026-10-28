@@ -7,20 +7,23 @@ if (!MONGO_URI) {
   console.warn("⚠️ MongoDB URI not found");
 }
 
-let cached = (global as any).mongoose;
+type ConnectionCache = {
+  conn: typeof mongoose | null;
+  promise: Promise<typeof mongoose> | null;
+};
 
-if (!cached) {
-  cached = (global as any).mongoose = {
-    conn: null,
-    promise: null,
-  };
-}
+const connectionGlobal = globalThis as typeof globalThis & { mongoose?: ConnectionCache };
+const cached: ConnectionCache = connectionGlobal.mongoose ??= { conn: null, promise: null };
 
 export async function connectDB() {
   // already connected
-  if (cached.conn) {
-    console.log("✅ Using existing MongoDB connection");
+  if (cached.conn?.connection.readyState === 1) {
     return cached.conn;
+  }
+
+  if (cached.conn?.connection.readyState === 0) {
+    cached.conn = null;
+    cached.promise = null;
   }
 
   // no URI
@@ -45,6 +48,13 @@ export async function connectDB() {
       });
   }
 
-  cached.conn = await cached.promise;
-  return cached.conn;
+  try {
+    cached.conn = await cached.promise;
+    return cached.conn;
+  } catch (error) {
+    // A temporary outage must not leave every later request awaiting a rejected promise.
+    cached.conn = null;
+    cached.promise = null;
+    throw error;
+  }
 }

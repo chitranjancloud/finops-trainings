@@ -1,4 +1,5 @@
 "use client";
+import { notify } from "@/components/Feedback";
 import S3BatchContent from "@/components/S3BatchContent";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -51,35 +52,6 @@ export default function StudentBatchesPage() {
   // batchId → { completedCount, totalCount, pct }
   const [batchProgress, setBatchProgress] = useState<Record<string, { completedCount: number; totalCount: number; pct: number }>>({});
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      const key = event.key.toLowerCase();
-      const blocked =
-        (event.ctrlKey && ["s", "p", "u"].includes(key)) ||
-        (event.ctrlKey && event.shiftKey && ["i", "j", "c"].includes(key)) ||
-        key === "f12";
-
-      if (blocked) {
-        event.preventDefault();
-        event.stopPropagation();
-      }
-    };
-
-    const onContextMenu = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      if (["VIDEO", "IFRAME"].includes(target.tagName)) {
-        event.preventDefault();
-      }
-    };
-
-    document.addEventListener("keydown", onKeyDown, { capture: true });
-    document.addEventListener("contextmenu", onContextMenu, { capture: true });
-
-    return () => {
-      document.removeEventListener("keydown", onKeyDown, { capture: true });
-      document.removeEventListener("contextmenu", onContextMenu, { capture: true });
-    };
-  }, []);
 
   const auth = () => {
     const storedUser = localStorage.getItem("user");
@@ -109,11 +81,11 @@ export default function StudentBatchesPage() {
     const { user, sessionToken, deviceId } = auth();
     if (!user || !sessionToken || !deviceId) { window.location.href = "/login"; return; }
 
-    await markNotificationsRead(user._id, ["batch", "test", "assignment"]);
+    void markNotificationsRead(user._id, ["batch", "test", "assignment"]);
 
     const params = new URLSearchParams({ scope: "student", userId: user._id, sessionToken, deviceId });
     try {
-      setLoading(true);
+      setLoading(true); setError("");
       const [batchRes, submissionRes] = await Promise.all([
         fetch(`/api/batches?${params.toString()}`, { cache: "no-store" }),
         fetch(`/api/batch-submissions?${params.toString()}`, { cache: "no-store" }),
@@ -126,8 +98,13 @@ export default function StudentBatchesPage() {
       setRecordedCourses(batchData.recordedCourses || []);
       setPendingLiveEnrollments(batchData.pendingLiveEnrollments || []);
       setSubmissions(submissionData.submissions || []);
-      setSelectedId(batchData.batches?.[0]?._id || "");
+      const requested = new URLSearchParams(window.location.search);
+      const requestedBatch = requested.get("batch");
+      setSelectedId(batchData.batches?.find((batch: any) => batch._id === requestedBatch)?._id || batchData.batches?.[0]?._id || "");
+      const requestedTab = requested.get("tab");
+      if (["materials", "tests", "assignments", "notices", "faculty"].includes(requestedTab || "")) setActiveTab(requestedTab as typeof activeTab);
 
+      setLoading(false);
       // Load lesson progress for all batches to populate sidebar progress bars
       const loadedBatches: any[] = batchData.batches || [];
       if (loadedBatches.length > 0 && user && sessionToken && deviceId) {
@@ -177,8 +154,8 @@ export default function StudentBatchesPage() {
   return (
     <main className="dash-page px-4 pt-24 pb-16 sm:px-6">
       <div className="relative max-w-7xl mx-auto">
-        <Link href="/" className="inline-flex items-center gap-2 text-slate-400 hover:text-white mb-8 text-sm transition-colors">
-          <ArrowLeft size={16} /> Back to Home
+        <Link href="/student" className="inline-flex items-center gap-2 text-slate-400 hover:text-white mb-8 text-sm transition-colors">
+          <ArrowLeft size={16} /> Back to Dashboard
         </Link>
 
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-8">
@@ -197,7 +174,7 @@ export default function StudentBatchesPage() {
         {loading ? (
           <Empty text="Loading batch content..." />
         ) : error ? (
-          <Empty text={error} danger />
+          <div role="alert"><Empty text={error} danger /><button onClick={loadAll} className="mt-4 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white">Try again</button></div>
         ) : batches.length === 0 && recordedCourses.length === 0 && pendingLiveEnrollments.length === 0 ? (
           <Empty text="No enrolled content is available yet." />
         ) : (
@@ -1346,7 +1323,7 @@ function AssessmentCard({ type, batch, item, submission, onSubmitted, auth }: an
     const res = await fetch("/api/upload", { method: "POST", body: formData });
     const data = await res.json();
     if (data.success) setFileUrl(data.url);
-    else alert(data.message || "Upload failed");
+    else notify(data.message || "Upload failed");
   };
 
   const submit = async (autoSubmitted = false) => {
@@ -1386,7 +1363,7 @@ function AssessmentCard({ type, batch, item, submission, onSubmitted, auth }: an
       });
       onSubmitted();
     } else {
-      alert(data.message || "Submission failed");
+      notify(data.message || "Submission failed");
     }
   };
 

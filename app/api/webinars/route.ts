@@ -1,16 +1,12 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import { createNotification } from "@/lib/notifications";
-import { defaultWebinars } from "@/lib/defaultHomepageContent";
 import WebinarEvent from "@/models/WebinarEvent";
 
 export async function GET() {
   try {
     await connectDB();
 
-    if ((await WebinarEvent.countDocuments()) === 0) {
-      await WebinarEvent.insertMany(defaultWebinars);
-    }
 
     const webinars = await WebinarEvent.find().sort({
       displayOrder: 1,

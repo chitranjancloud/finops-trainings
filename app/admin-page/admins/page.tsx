@@ -231,41 +231,9 @@ export default function AdminMembersPage() {
 
   return (
     <div className="min-h-screen bg-[#f4f7fb] flex overflow-hidden">
-      <aside className="w-[250px] bg-white border-r border-gray-200 flex flex-col justify-between fixed h-screen overflow-y-auto">
-        <div>
-          <div className="px-8 py-10">
-            <h1 className="text-4xl font-bold text-blue-500">FinOps</h1>
-          </div>
 
-          <div className="px-4 space-y-2">
-            <SidebarLink href="/admin-page" icon={<BookOpen size={22} />} text="Courses" />
-            <SidebarLink href="/admin-page/batches" icon={<Briefcase size={22} />} text="Batches" />
-            <SidebarLink href="/admin-page/notifications" icon={<Bell size={22} />} text="Notifications" badge={<AdminNotificationBadge />} />
-            <SidebarLink href="/admin-page/content" icon={<FileText size={22} />} text="Content" />
-            <SidebarLink href="/admin-page/chats" icon={<MessageCircle size={22} />} text="Chats" />
-            <SidebarLink href="/admin-page/people" icon={<Users size={22} />} text="People" />
-            <SidebarLink href="/admin-page#inquiries" icon={<Mail size={22} />} text="Inquiries" />
-            <Link
-              href="/admin-page/admins"
-              className="w-full flex items-center gap-4 bg-blue-100 text-blue-600 px-5 py-4 rounded-2xl font-medium"
-            >
-              <ShieldCheck size={22} />
-              Admin Members
-            </Link>
-          </div>
-        </div>
 
-        <div className="p-5">
-          <div className="bg-[#2563eb] rounded-3xl p-5 text-white">
-            <h2 className="text-xl font-semibold">Admin Control</h2>
-            <p className="text-sm opacity-90 mt-2">
-              Only active admins can invite new admin members.
-            </p>
-          </div>
-        </div>
-      </aside>
-
-      <main className="flex-1 ml-[250px] p-10 overflow-y-auto">
+      <main className="flex-1  p-10 overflow-y-auto">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-10">
           <div>
             <h1 className="text-5xl font-bold text-gray-800">

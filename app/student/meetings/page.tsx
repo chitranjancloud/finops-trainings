@@ -65,9 +65,9 @@ export default function StudentMeetingsPage() {
     <main className="min-h-screen bg-[#0f172a] text-white px-6 pt-24 pb-16">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.18),transparent_34%),radial-gradient(circle_at_bottom_left,rgba(168,85,247,0.14),transparent_36%)] pointer-events-none" />
       <div className="relative max-w-7xl mx-auto">
-        <Link href="/" className="inline-flex items-center gap-2 text-slate-300 hover:text-white mb-8">
+        <Link href="/student" className="inline-flex items-center gap-2 text-slate-300 hover:text-white mb-8">
           <ArrowLeft size={18} />
-          Back to Home
+          Back to Dashboard
         </Link>
 
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-10">

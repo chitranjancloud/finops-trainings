@@ -558,28 +558,9 @@ export default function FeesPage() {
 
   return (
     <div className="min-h-screen bg-[#f4f7fb] flex overflow-hidden">
-      <aside className="fixed h-screen w-[250px] overflow-y-auto border-r border-gray-200 bg-white z-20">
-        <div className="px-8 py-10">
-          <h1 className="text-4xl font-bold text-blue-500">FinOps</h1>
-        </div>
-        <div className="px-4 space-y-2">
-          <SidebarLink href="/admin-page" icon={<BookOpen size={22} />} text="Courses" />
-          <SidebarLink href="/admin-page/batches" icon={<Briefcase size={22} />} text="Batches" />
-          <SidebarLink href="/admin-page/fees" icon={<CreditCard size={22} />} text="Fees" active />
-          <SidebarLink
-            href="/admin-page/notifications"
-            icon={<Bell size={22} />}
-            text="Notifications"
-            badge={<AdminNotificationBadge />}
-          />
-          <SidebarLink href="/admin-page/tests" icon={<FileText size={22} />} text="Tests" />
-          <SidebarLink href="/admin-page/assignments" icon={<FileText size={22} />} text="Assignments" />
-          <SidebarLink href="/admin-page/chats" icon={<MessageCircle size={22} />} text="Chats" />
-          <SidebarLink href="/admin-page/people" icon={<Users size={22} />} text="People" />
-        </div>
-      </aside>
 
-      <main className="ml-[250px] min-h-screen flex-1 p-4 md:p-8">
+
+      <main className=" min-h-screen flex-1 p-4 md:p-8">
         <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-sm font-bold uppercase tracking-[0.25em] text-blue-600">

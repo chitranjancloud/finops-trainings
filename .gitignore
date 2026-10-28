@@ -11,6 +11,9 @@ node_modules/
 # Build and output
 .next/
 .next-s3-check/
+.next-ui-preview/
+artifacts/ui-refresh/
+artifacts/loading-performance/
 /out
 /build
 dist/

@@ -162,24 +162,6 @@ function formatCourse(course: CourseInfo) {
   }`;
 }
 
-async function getAvailableRoutes(routes: WebsiteRoute[]) {
-  const checkedRoutes = await Promise.all(
-    routes.map(async (route) => {
-      try {
-        const response = await fetch(route.href, {
-          cache: "no-store",
-        });
-
-        return response.ok ? route : null;
-      } catch {
-        return null;
-      }
-    })
-  );
-
-  return checkedRoutes.filter(Boolean) as WebsiteRoute[];
-}
-
 export default function Chatbot() {
   const pathname = usePathname();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -187,8 +169,8 @@ export default function Chatbot() {
   const [input, setInput] = useState("");
   const [courses, setCourses] = useState<CourseInfo[]>([]);
   const [webinars, setWebinars] = useState<WebinarInfo[]>([]);
-  const [availableLearningOptions, setAvailableLearningOptions] = useState<WebsiteRoute[]>([]);
-  const [availableSitePages, setAvailableSitePages] = useState<WebsiteRoute[]>([]);
+  const availableLearningOptions = learningOptions;
+  const availableSitePages = sitePages;
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "bot",
@@ -199,15 +181,14 @@ export default function Chatbot() {
   const shouldHide = pathname.startsWith("/admin-page") || pathname === "/student/batches";
 
   useEffect(() => {
-    if (shouldHide) return;
+    if (shouldHide || !open) return;
+    const controller = new AbortController();
 
     const fetchWebsiteData = async () => {
       try {
-        const [courseRes, webinarRes, learningRoutes, pageRoutes] = await Promise.all([
-          fetch("/api/courses", { cache: "no-store" }),
-          fetch("/api/webinars", { cache: "no-store" }),
-          getAvailableRoutes(learningOptions),
-          getAvailableRoutes(sitePages),
+        const [courseRes, webinarRes] = await Promise.all([
+          fetch("/api/courses", { signal: controller.signal }),
+          fetch("/api/webinars", { signal: controller.signal }),
         ]);
 
         const courseData = await courseRes.json();
@@ -240,15 +221,15 @@ export default function Chatbot() {
           );
         }
 
-        setAvailableLearningOptions(learningRoutes);
-        setAvailableSitePages(pageRoutes);
+
       } catch (error) {
         console.log(error);
       }
     };
 
     fetchWebsiteData();
-  }, [shouldHide]);
+    return () => controller.abort();
+  }, [shouldHide, open]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });

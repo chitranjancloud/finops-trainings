@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import { createNotification } from "@/lib/notifications";
-import { defaultTestimonials } from "@/lib/defaultHomepageContent";
 import Enrollment from "@/models/Enrollment";
 import Testimonial from "@/models/Testimonial";
 import User from "@/models/User";
@@ -35,9 +34,6 @@ export async function GET(req: Request) {
   try {
     await connectDB();
 
-    if ((await Testimonial.countDocuments()) === 0) {
-      await Testimonial.insertMany(defaultTestimonials);
-    }
 
     const { searchParams } = new URL(req.url);
     const scope = searchParams.get("scope") || "public";

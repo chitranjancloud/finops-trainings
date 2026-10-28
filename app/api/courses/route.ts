@@ -47,7 +47,7 @@ export async function GET(req: Request) {
     // FETCH COURSES
     const courses = await Course.find().sort({
       createdAt: -1,
-    });
+    }).lean();
 
     // SUCCESS RESPONSE
     return NextResponse.json({

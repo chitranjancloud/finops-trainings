@@ -206,44 +206,7 @@ export default function ChatsPage() {
 
   return (
     <div className="h-screen bg-[#faf7f7] flex overflow-hidden">
-      <div className="w-[250px] bg-white border-r border-gray-200 flex flex-col justify-between">
-        <div>
-          <div className="px-8 py-10">
-            <h1 className="text-4xl font-bold text-blue-500">FinOps</h1>
-          </div>
 
-          <div className="px-4 space-y-2">
-            <SidebarLink href="/admin-page" icon={<BookOpen size={22} />} text="Courses" />
-            <SidebarLink href="/admin-page/batches" icon={<Briefcase size={22} />} text="Batches" />
-            <SidebarLink href="/admin-page/notifications" icon={<Bell size={22} />} text="Notifications" badge={<AdminNotificationBadge />} />
-            <SidebarLink href="/admin-page/content" icon={<FileText size={22} />} text="Content" />
-            <SidebarLink href="/admin-page" icon={<LayoutDashboard size={22} />} text="Your App" />
-            <SidebarLink href="/admin-page" icon={<Users size={22} />} text="Landing Pages" />
-            <SidebarLink href="/admin-page" icon={<MessageCircle size={22} />} text="1:1 Sessions" />
-            <Link
-              href="/admin-page/chats"
-              className="w-full flex items-center gap-4 bg-blue-100 text-blue-600 px-5 py-4 rounded-2xl font-medium"
-            >
-              <MessageCircle size={22} />
-              Chats
-            </Link>
-            <SidebarLink href="/admin-page" icon={<BarChart3 size={22} />} text="Analytics" />
-            <SidebarLink href="/admin-page" icon={<Settings size={22} />} text="Integrations" />
-            <SidebarLink href="/admin-page" icon={<Megaphone size={22} />} text="Campaigns" />
-            <SidebarLink href="/admin-page/people" icon={<Users size={22} />} text="People" />
-          </div>
-        </div>
-
-        <div className="p-5">
-          <div className="bg-[#2563eb] rounded-3xl p-5 text-white">
-            <h2 className="text-xl font-semibold">Help & Support</h2>
-            <p className="text-sm opacity-90 mt-2">Contact FinOps support team.</p>
-            <button className="mt-4 bg-white text-blue-600 px-5 py-2 rounded-xl font-semibold">
-              Contact
-            </button>
-          </div>
-        </div>
-      </div>
 
       <div className="flex-1 min-h-0 overflow-hidden p-10">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 mb-8">

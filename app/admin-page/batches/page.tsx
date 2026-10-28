@@ -882,26 +882,9 @@ export default function BatchesPage() {
   return (
     <div className="min-h-screen bg-[#f4f7fb] flex">
       {/* Sidebar */}
-      <aside className="w-[250px] bg-white border-r border-gray-200 flex-col justify-between fixed top-0 left-0 h-screen overflow-y-auto hidden lg:flex">
-        <div>
-          <div className="px-8 py-10">
-            <h1 className="text-4xl font-bold text-blue-500">FinOps</h1>
-          </div>
-          <nav className="px-4 space-y-2">
-            <SidebarLink href="/admin-page" icon={<BookOpen size={22} />} text="Courses" />
-            <SidebarLink active href="/admin-page/batches" icon={<Briefcase size={22} />} text="Batches" />
-            <SidebarLink href="/admin-page/notifications" icon={<Bell size={22} />} text="Notifications" badge={<AdminNotificationBadge />} />
-            <SidebarLink href="/admin-page/tests" icon={<GraduationCap size={22} />} text="Tests" />
-            <SidebarLink href="/admin-page/assignments" icon={<FileText size={22} />} text="Assignments" />
-            <SidebarLink href="/admin-page/content" icon={<FileText size={22} />} text="Content" />
-            <SidebarLink href="/admin-page/chats" icon={<MessageCircle size={22} />} text="Chats" />
-            <SidebarLink href="/admin-page/people" icon={<Users size={22} />} text="People" />
-          </nav>
-        </div>
-        <div className="border-t border-slate-100 p-4"><details className="rounded-xl p-3 text-sm text-slate-500"><summary className="flex cursor-pointer items-center gap-2"><HelpCircle size={18} />Batch help</summary><p className="mt-3 leading-6">Select a batch to manage content and students. Open Settings to update batch details and access rules.</p></details></div>
-      </aside>
 
-      <main className="flex-1 min-w-0 lg:ml-[250px] p-4 lg:p-8 overflow-y-auto">
+
+      <main className="flex-1 min-w-0  p-4 lg:p-8 overflow-y-auto">
         {/* Header */}
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-6">
           <div>
