@@ -1,5 +1,6 @@
 "use client";
 import { FILE_TYPES, localDate, type S3Category } from "./s3Types";
+import { uploadRequest } from "./uploadRecovery";
 
 export function storageHeaders() {
   let user: { _id?: string } = {};
@@ -15,8 +16,10 @@ export class StorageRequestError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
 export async function storageRequest<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(path, { method: body === undefined ? "GET" : "POST", headers: storageHeaders(),
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }), cache: "no-store", signal });
+  const request = path === "/api/s3/admin/uploads" || /\/api\/s3\/admin\/uploads\/[^/]+\/(parts|complete)$/.test(path)
+    ? uploadRequest : (url: string, init: RequestInit) => fetch(url, init);
+  const res = await request(path, { method: body === undefined ? "GET" : "POST", headers: storageHeaders(),
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }), cache: "no-store", signal }, signal);
   const data = await res.json();
   if (!res.ok || !data.success) throw new StorageRequestError(res.status, data.message || "Storage request failed.");
   return data as T;
@@ -68,7 +71,7 @@ export async function uploadS3File(file: File, courseId: string, batchId: string
         for (let attempt = 0; attempt < 3; attempt++) {
           try {
             const signed = await storageRequest<{ parts: { url: string }[] }>(`/api/s3/admin/uploads/${session.uploadSessionId}/parts`, { partNumbers: [number] }, signal);
-            const res = await fetch(signed.parts[0].url, { method: "PUT", body: file.slice((number - 1) * session.partSize, Math.min(number * session.partSize, file.size)), signal, credentials: "omit", referrerPolicy: "no-referrer" });
+            const res = await uploadRequest(signed.parts[0].url, { method: "PUT", body: file.slice((number - 1) * session.partSize, Math.min(number * session.partSize, file.size)), credentials: "omit", referrerPolicy: "no-referrer" }, signal, 15 * 60_000);
             if (!res.ok) throw new Error("S3 rejected an upload part. Check bucket CORS and retry.");
             etag = res.headers.get("etag") || "";
             if (!etag) throw new Error("S3 did not expose ETag. Check the bucket CORS settings.");
