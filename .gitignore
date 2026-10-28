@@ -14,6 +14,7 @@ node_modules/
 .next-ui-preview/
 artifacts/ui-refresh/
 artifacts/loading-performance/
+artifacts/classroom-redesign/
 /out
 /build
 dist/

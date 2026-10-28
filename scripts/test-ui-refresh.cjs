@@ -99,7 +99,7 @@ let browser;
   assert.equal(await page.getByRole('button', { name: 'Open navigation', exact: true }).evaluate(el => el === document.activeElement), true);
   await page.getByRole('link', { name: /Build your first cloud lab/ }).click();
   await page.waitForURL('**/student/batches?batch=batch-1&tab=assignments');
-  await page.getByRole('heading', { name: 'My Batches' }).waitFor();
+  await page.getByRole('heading', { name: 'Azure October', exact: true }).waitFor();
   await noOverflow('mobile batch classroom');
   await page.setViewportSize({ width: 1440, height: 1000 });
   await go('/student');

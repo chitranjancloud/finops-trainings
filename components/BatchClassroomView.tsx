@@ -30,23 +30,25 @@ export default function BatchClassroomView({ title, courseName, code, startDate,
   const validStartDate = startDate && !Number.isNaN(Date.parse(startDate));
   return (
     <div className="mx-auto max-w-6xl">
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <Link href="/student/batches" className="inline-flex min-h-10 items-center gap-2 rounded-lg text-sm font-medium text-slate-300 transition-colors hover:text-white"><ArrowLeft size={17} />All my batches</Link>
         <Link href="/student/chats" className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-medium text-slate-300 hover:bg-white/[0.07]"><MessageCircle size={16} />Ask your trainer</Link>
       </div>
 
-      <header className="pb-7">
-        <div className="mb-4 flex flex-wrap items-center gap-2 text-xs font-medium">
+      <header className="pb-3">
+        <div className="mb-2 flex flex-wrap items-center gap-2 text-xs font-medium">
           <span className="rounded-md border border-blue-400/20 bg-blue-400/10 px-2.5 py-1 text-blue-200">{recorded ? "Self-paced course" : "Your classroom"}</span>
           {code && <span className="break-all text-slate-400">{code}</span>}
         </div>
-        <h1 className="max-w-4xl text-3xl font-semibold leading-tight tracking-tight text-white">{title}</h1>
-        {(courseName || validStartDate) && <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-400">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+        <h1 className="max-w-4xl break-words text-2xl font-semibold leading-tight tracking-tight text-white">{title}</h1>
+        {(courseName || validStartDate) && <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-400">
           {courseName && <span className="inline-flex items-center gap-2"><BookOpen size={16} className="shrink-0 text-blue-300" />{courseName}</span>}
           {validStartDate && <span className="inline-flex items-center gap-2"><CalendarDays size={16} className="shrink-0" />Batch start · {new Date(startDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span>}
         </div>}
-        {description && <details className="group mt-5 max-w-3xl rounded-xl border border-white/[0.07] bg-white/[0.02]">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm text-slate-300">About this {recorded ? "course" : "batch"}<ChevronDown size={16} className="shrink-0 transition-transform group-open:rotate-180" /></summary>
+        </div>
+        {description && <details className="group mt-2 max-w-3xl">
+          <summary className="flex min-h-9 w-fit cursor-pointer list-none items-center gap-2 text-xs text-slate-400 hover:text-slate-200">About this {recorded ? "course" : "batch"}<ChevronDown size={14} className="shrink-0 transition-transform group-open:rotate-180" /></summary>
           <p className="whitespace-pre-wrap border-t border-white/[0.06] px-4 py-4 text-sm leading-7 text-slate-400">{description}</p>
         </details>}
       </header>
@@ -73,12 +75,12 @@ export default function BatchClassroomView({ title, courseName, code, startDate,
               event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
               onTabChange?.(tabs[next].key);
             }}
-            className={`inline-flex min-h-14 shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-4 text-sm font-medium transition-colors ${activeTab === key ? "border-blue-400 text-blue-200" : "border-transparent text-slate-400 hover:text-white"}`}
+            className={`inline-flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 text-sm font-medium transition-colors ${activeTab === key ? "border-blue-400 text-blue-200" : "border-transparent text-slate-400 hover:text-white"}`}
           ><Icon size={17} />{label}{Boolean(counts[key]) && <span className="rounded-md bg-white/[0.07] px-1.5 py-0.5 text-xs tabular-nums">{counts[key]}</span>}</button>)}
         </div>
       </div>}
 
-      <section id="classroom-content" role={recorded ? undefined : "tabpanel"} aria-labelledby={recorded ? undefined : `classroom-tab-${activeTab}`} tabIndex={0} className="mt-6 min-w-0 rounded-2xl border border-white/[0.08] bg-[#111c2e] p-4 outline-none sm:p-6">
+      <section id="classroom-content" role={recorded ? undefined : "tabpanel"} aria-labelledby={recorded ? undefined : `classroom-tab-${activeTab}`} tabIndex={0} className="mt-4 min-w-0 rounded-2xl border border-white/[0.08] bg-[#111c2e] p-4 outline-none sm:p-6">
         {children}
       </section>
     </div>
