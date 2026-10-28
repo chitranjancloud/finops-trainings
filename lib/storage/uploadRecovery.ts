@@ -1,6 +1,6 @@
 // Upload control requests are short. Only each file part travels directly to S3.
 export async function uploadRequest(url: string, init: RequestInit, signal?: AbortSignal,
-  timeoutMs = 30_000, retryDelayMs = 1000): Promise<Response> {
+  timeoutMs = 30_000, retryDelayMs = 1000, onRetry?: () => void): Promise<Response> {
   for (let attempt = 0; ; attempt++) {
     signal?.throwIfAborted();
     const controller = new AbortController();
@@ -21,6 +21,7 @@ export async function uploadRequest(url: string, init: RequestInit, signal?: Abo
       clearTimeout(timer);
       signal?.removeEventListener("abort", abort);
     }
+    onRetry?.();
     await new Promise<void>((resolve, reject) => {
       const done = () => { signal?.removeEventListener("abort", cancelled); resolve(); };
       const timer = setTimeout(done, retryDelayMs * (attempt + 1));

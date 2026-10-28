@@ -3,11 +3,13 @@ import { uploadRequest } from "../lib/storage/uploadRecovery";
 
 async function main() {
   let calls = 0;
+  let retries = 0;
   const original = globalThis.fetch;
   try {
     globalThis.fetch = async () => { calls++; return new Response("", { status: calls === 1 ? 503 : 200 }); };
-    assert.equal((await uploadRequest("https://example.test", {}, undefined, 100, 1)).status, 200);
+    assert.equal((await uploadRequest("https://example.test", {}, undefined, 100, 1, () => retries++)).status, 200);
     assert.equal(calls, 2);
+    assert.equal(retries, 1, "UI is notified of automatic retry");
     calls = 0;
     globalThis.fetch = async () => { calls++; return new Response("", { status: 401 }); };
     assert.equal((await uploadRequest("https://example.test", {}, undefined, 100, 1)).status, 401);

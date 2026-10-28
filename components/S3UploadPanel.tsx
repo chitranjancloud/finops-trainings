@@ -1,9 +1,10 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { cancelSavedUpload, storageRequest, uploadS3File } from "@/lib/storage/s3Client";
+import { cancelSavedUpload, storageRequest, uploadS3File, type UploadProgress } from "@/lib/storage/s3Client";
 import { CATEGORY_LABELS, allowedExtensions, localDate, type S3Category, type S3PublicAsset } from "@/lib/storage/s3Types";
 import { FileText, Film, MoreHorizontal, RefreshCw, SlidersHorizontal } from "lucide-react";
 import S3AssetViewer from "./S3AssetViewer";
+import S3TransferStatus from "./S3TransferStatus";
 type Event = { action: string; actorId: string; relatedAssetId: string; createdAt: string };
 export default function S3UploadPanel({ courseId: selectedCourseId, batchId: selectedBatchId, category: initialCategory = "video", library = false }: { library?: boolean; courseId?: string; batchId?: string; category?: S3Category } = {}) {
   const [category, setCategory] = useState<S3Category>(initialCategory);
@@ -15,7 +16,8 @@ export default function S3UploadPanel({ courseId: selectedCourseId, batchId: sel
   const [file, setFile] = useState<File | null>(null); const [contentDate, setContentDate] = useState(localDate);
   const [dateFilter, setDateFilter] = useState(""); const [archived, setArchived] = useState(false);
   const [replacing, setReplacing] = useState<S3PublicAsset | null>(null); const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState(0); const [message, setMessage] = useState("");
+  const [transfer, setTransfer] = useState<UploadProgress | null>(null); const [message, setMessage] = useState("");
+  const [syncError, setSyncError] = useState(false);
   const [assets, setAssets] = useState<S3PublicAsset[]>([]); const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1); const [hasMore, setHasMore] = useState(false);
   const [preview, setPreview] = useState<S3PublicAsset | null>(null);
@@ -28,7 +30,7 @@ export default function S3UploadPanel({ courseId: selectedCourseId, batchId: sel
   const [events, setEvents] = useState<{ asset: S3PublicAsset; events: Event[] } | null>(null);
   const controller = useRef<AbortController | null>(null); const fileInput = useRef<HTMLInputElement | null>(null);
   useEffect(() => () => controller.current?.abort(), []);
-  const list = useCallback(async (nextPage = 1, signal?: AbortSignal) => {
+  const list = useCallback(async (nextPage = 1, signal?: AbortSignal, background = false) => {
     try {
       const params = new URLSearchParams({ page: String(nextPage), includeArchived: String(archived) });
       if (!library || filterCategory !== "all") params.set("category", library ? filterCategory : category);
@@ -36,26 +38,43 @@ export default function S3UploadPanel({ courseId: selectedCourseId, batchId: sel
       if (courseId) params.set("courseId", courseId); if (batchId) params.set("batchId", batchId);
       if (dateFilter) params.set("contentDate", dateFilter);
       const data = await storageRequest<{ assets: S3PublicAsset[]; hasMore: boolean; total: number }>(`/api/s3/admin/assets?${params}`, undefined, signal);
+      if (signal?.aborted) return;
+      setSyncError(false);
       setAssets(data.assets); setPage(nextPage); setHasMore(data.hasMore); setTotal(data.total);
+      setTransfer(current => current?.assetId && data.assets.some(a => a.assetId === current.assetId && ["ready", "deleted", "cancelled", "replaced"].includes(a.status)) ? null : current);
       setPreview((current) => current ? data.assets.find((asset) => asset.assetId === current.assetId) || null : null);
-    } catch (error) { if (!signal?.aborted) setMessage(error instanceof Error ? error.message : "Could not load files."); }
+    } catch (error) { if (!signal?.aborted) { setSyncError(true); if (!background) setMessage(error instanceof Error ? error.message : "Could not load files."); } }
   }, [courseId, batchId, category, dateFilter, archived, library, filterCategory, search]);
   useEffect(() => { const abort = new AbortController(); const timer = setTimeout(() => { if (courseId && batchId) void list(1, abort.signal); }, 0); return () => { clearTimeout(timer); abort.abort(); }; }, [courseId, batchId, list]);
-  const processing = assets.some((a) => ["queued", "processing"].includes(a.videoProcessingState || ""));
   useEffect(() => {
-    if (!processing) return;
+    if (!courseId || !batchId) return;
     const abort = new AbortController();
-    const timer = setInterval(() => { if (!document.hidden && !busy) void list(page, abort.signal); }, 10000);
-    return () => { clearInterval(timer); abort.abort(); };
-  }, [processing, list, page, busy]);
+    let pending = false;
+    const refresh = async () => {
+      if (document.hidden || pending || abort.signal.aborted) return;
+      pending = true;
+      const timeout = new AbortController();
+      const timer = setTimeout(() => timeout.abort(), 20000);
+      try {
+        await list(page, AbortSignal.any([abort.signal, timeout.signal]), true);
+        if (timeout.signal.aborted && !abort.signal.aborted) setSyncError(true);
+      } finally { clearTimeout(timer); pending = false; }
+    };
+    const timer = setInterval(() => void refresh(), 5000);
+    const visible = () => { if (!document.hidden) void refresh(); };
+    document.addEventListener("visibilitychange", visible);
+    window.addEventListener("focus", visible);
+    window.addEventListener("online", visible);
+    return () => { clearInterval(timer); abort.abort(); document.removeEventListener("visibilitychange", visible); window.removeEventListener("focus", visible); window.removeEventListener("online", visible); };
+  }, [courseId, batchId, list, page]);
   const upload = async () => {
     if (!file || !courseId || !batchId || !contentDate) { setMessage("Select a file, lesson date and a saved course/batch first."); return; }
     setBusy(true); setMessage(""); const abort = new AbortController(); controller.current = abort;
     try {
-      const result = await uploadS3File(file, courseId.trim(), batchId.trim(), abort.signal, setProgress, { category, contentDate, replacesAssetId: replacing?.assetId });
-      setMessage(result.videoProcessingState === "queued" ? "Upload verified. Video queued for processing. Keep the video worker running; any previous recording stays available until processing succeeds." : replacing ? "Replacement verified. The new file is available to students." : "Upload verified. File is available to this batch.");
-      setReplacing(null); setFile(null); setProgress(0); if (fileInput.current) fileInput.current.value = ""; await list();
-    } catch (error) { setMessage(abort.signal.aborted ? "Paused. Use the same file, date and replacement selection to resume." : error instanceof Error ? error.message : "Upload failed."); }
+      const result = await uploadS3File(file, courseId.trim(), batchId.trim(), abort.signal, () => {}, { category, contentDate, replacesAssetId: replacing?.assetId, onStatus: setTransfer });
+      setMessage(result.videoProcessingState === "queued" ? "Upload verified. Follow the live video status below. Any previous recording stays available until preparation succeeds." : replacing ? "Replacement verified. The new file is available to students." : "Upload verified. File is available to this batch.");
+      setTransfer(null); setReplacing(null); setFile(null); if (fileInput.current) fileInput.current.value = ""; await list();
+    } catch (error) { setTransfer(current => current ? { ...current, stage: abort.signal.aborted ? "paused" : "failed" } : null); setMessage(abort.signal.aborted ? "Paused. Use the same file, date and replacement selection to resume." : error instanceof Error ? error.message : "Upload failed."); }
     finally { setBusy(false); }
   };
   const remove = async (asset: S3PublicAsset) => {
@@ -78,10 +97,12 @@ export default function S3UploadPanel({ courseId: selectedCourseId, batchId: sel
     <p className="text-xs text-slate-500">{category === "video" ? "MP4 up to 10 GiB. With video processing enabled, uploading automatically prepares small segments. Each recording keeps one name and plays continuously in the admin preview and student view when ready." : "PDF, Office documents, TXT, CSV, ZIP and images where supported; up to 500 MiB. Office/ZIP files open as downloads."} Resume with the same source file and lesson date.</p>
     <div className="flex flex-wrap gap-2 text-sm"><button type="button" disabled={busy || !file} onClick={upload} className="rounded-xl bg-blue-700 px-4 py-2 font-semibold text-white disabled:opacity-40">{replacing ? "Replace / resume" : "Upload / resume"}</button>
       <button type="button" disabled={!busy} onClick={() => controller.current?.abort()} className="rounded-xl border px-3 py-2 disabled:opacity-40">Pause upload</button>
-      <button type="button" disabled={busy} onClick={async () => { try { await cancelSavedUpload(); setProgress(0); setMessage("Saved upload cancelled."); } catch (e) { setMessage((e as Error).message); } }} className="rounded-xl border px-3 py-2 disabled:opacity-40">Cancel saved upload</button></div>
-    {busy && <div><progress max={100} value={progress} className="w-full" /><p className="text-xs">{progress}% uploaded</p></div>}
+      <button type="button" disabled={busy} onClick={async () => { try { await cancelSavedUpload(); setTransfer(null); setMessage("Saved upload cancelled."); await list(page); } catch (e) { setMessage((e as Error).message); } }} className="rounded-xl border px-3 py-2 disabled:opacity-40">Cancel saved upload</button></div>
+
     </div>}
+    {transfer && <S3TransferStatus state={transfer.stage} transfer={transfer} />}
     <p role="status" aria-live="polite" className="text-sm">{message}</p>
+    <p role="status" className={"text-xs " + (syncError ? "text-amber-700" : "text-slate-500")}>{syncError ? "Status updates interrupted. Showing the last known status; retrying automatically." : "Statuses update automatically. No page refresh needed."}</p>
     <div className="flex flex-wrap items-end gap-3 rounded-xl bg-slate-50 p-3 text-sm">
       {library && <label className="min-w-[180px] flex-1"><span className="mb-1 block text-xs font-medium text-slate-500">Search files</span><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by file name…" className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 outline-blue-500" /></label>}
       <label><span className="mb-1 block text-xs font-medium text-slate-500">Lesson date</span><input type="date" disabled={busy} value={dateFilter} onChange={e => setDateFilter(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2" /></label>
@@ -91,9 +112,10 @@ export default function S3UploadPanel({ courseId: selectedCourseId, batchId: sel
     </div>
     <div className="overflow-x-auto rounded-xl border border-slate-200"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-xs text-slate-500"><tr><th className="px-4 py-3">Name</th><th className="px-4 py-3">Type</th><th className="px-4 py-3">Lesson date</th><th className="px-4 py-3">Status</th><th className="px-4 py-3 text-right">Actions</th></tr></thead><tbody>{assets.map((asset) => {
       const state = asset.status === "ready" && ["queued", "processing", "failed"].includes(asset.videoProcessingState || "") ? asset.videoProcessingState! : asset.status;
-      const statusStyle = state === "ready" ? "bg-emerald-50 text-emerald-700" : ["failed", "deleted"].includes(state) ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700";
+      const liveTransfer = transfer?.assetId === asset.assetId ? transfer : undefined;
+      const displayState = liveTransfer?.stage || (state === "uploading" ? "incomplete" : state);
       const Icon = asset.category === "video" ? Film : FileText;
-      return <tr key={asset.assetId} className="border-t border-slate-100 align-top transition hover:bg-slate-50/60"><td className="min-w-[220px] max-w-sm px-4 py-4"><div className="flex items-start gap-3"><span className={"rounded-lg p-2 " + (asset.category === "video" ? "bg-blue-50 text-blue-600" : "bg-violet-50 text-violet-600")}><Icon size={18} /></span><div className="min-w-0"><p className="break-words font-medium text-slate-800">{asset.filename}</p><p className="mt-1 text-xs text-slate-500">{(asset.byteSize / 1048576).toFixed(2)} MiB{asset.videoDurationSeconds ? " · " + Math.max(1, Math.round(asset.videoDurationSeconds / 60)) + " min" : ""}</p>{asset.videoProcessingErrorCode && <p className="mt-1 text-xs text-red-700">{asset.videoProcessingErrorCode}</p>}{asset.status === "deleted" && asset.cleanupState !== "done" && <p className="mt-1 text-xs text-amber-700">Cleanup pending</p>}</div></div></td><td className="px-4 py-4 text-xs text-slate-500">{CATEGORY_LABELS[asset.category]}</td><td className="whitespace-nowrap px-4 py-4 text-slate-600">{asset.contentDate ? new Date(asset.contentDate + "T00:00:00").toLocaleDateString("en-GB", {day:"numeric",month:"short",year:"numeric"}) : "—"}</td><td className="px-4 py-4"><span className={"inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium capitalize " + statusStyle}><span className="h-1.5 w-1.5 rounded-full bg-current" />{state}</span></td><td className="px-4 py-4"><div className="flex items-center justify-end gap-2">{asset.status === "ready" && <button disabled={busy} onClick={() => setPreview(asset)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700">Preview</button>}<details className="relative"><summary aria-label={"More actions for " + asset.filename} className="cursor-pointer list-none rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"><MoreHorizontal size={18} /></summary><div className="relative z-10 mt-2 flex min-w-32 flex-col items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+      return <tr key={asset.assetId} className="border-t border-slate-100 align-top transition hover:bg-slate-50/60"><td className="min-w-[220px] max-w-sm px-4 py-4"><div className="flex items-start gap-3"><span className={"rounded-lg p-2 " + (asset.category === "video" ? "bg-blue-50 text-blue-600" : "bg-violet-50 text-violet-600")}><Icon size={18} /></span><div className="min-w-0"><p className="break-words font-medium text-slate-800">{asset.filename}</p><p className="mt-1 text-xs text-slate-500">{(asset.byteSize / 1048576).toFixed(2)} MiB{asset.videoDurationSeconds ? " · " + Math.max(1, Math.round(asset.videoDurationSeconds / 60)) + " min" : ""}</p>{asset.videoProcessingErrorCode && <p className="mt-1 text-xs text-red-700">{asset.videoProcessingErrorCode}</p>}{asset.status === "deleted" && asset.cleanupState !== "done" && <p className="mt-1 text-xs text-amber-700">Cleanup pending</p>}</div></div></td><td className="px-4 py-4 text-xs text-slate-500">{CATEGORY_LABELS[asset.category]}</td><td className="whitespace-nowrap px-4 py-4 text-slate-600">{asset.contentDate ? new Date(asset.contentDate + "T00:00:00").toLocaleDateString("en-GB", {day:"numeric",month:"short",year:"numeric"}) : "—"}</td><td className="px-4 py-4"><S3TransferStatus compact state={displayState} transfer={liveTransfer} /></td><td className="px-4 py-4"><div className="flex items-center justify-end gap-2">{asset.status === "ready" && <button disabled={busy} onClick={() => setPreview(asset)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700">Preview</button>}<details className="relative"><summary aria-label={"More actions for " + asset.filename} className="cursor-pointer list-none rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"><MoreHorizontal size={18} /></summary><div className="relative z-10 mt-2 flex min-w-32 flex-col items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
       {asset.status === "ready" && asset.contentType === "video/mp4" && ["failed", "not-requested"].includes(asset.videoProcessingState || "not-requested") && <button type="button" disabled={busy} onClick={async () => { try { const data = await storageRequest<{ message: string }>(`/api/s3/admin/assets/${asset.assetId}/video-retry`, {}); setMessage(data.message); await list(page); } catch (e) { setMessage((e as Error).message); } }} className="text-blue-700 underline">{asset.videoProcessingState === "failed" ? "Retry processing" : "Prepare segments"}</button>}{asset.status === "ready" && <><button type="button" disabled={busy} onClick={() => { setShowUpload(true); setCategory(asset.category); setReplacing(asset); setContentDate(asset.contentDate || localDate()); setFile(null); if (fileInput.current) { fileInput.current.value = ""; fileInput.current.focus(); } }} className="text-blue-700 underline">Replace</button></>}
       {["ready", "replaced", "failed", "cancelled"].includes(asset.status) || (asset.status === "deleted" && asset.cleanupState !== "done") ? <button type="button" disabled={busy} onClick={() => remove(asset)} className="text-red-700 underline">{asset.status === "deleted" ? "Retry S3 cleanup" : "Delete"}</button> : null}
       <button type="button" disabled={busy} onClick={async () => { try { setEvents(await storageRequest(`/api/s3/admin/assets/${asset.assetId}/history`)); } catch (e) { setMessage((e as Error).message); } }} className="text-slate-600 underline">History</button>

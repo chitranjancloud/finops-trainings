@@ -15,11 +15,11 @@ export function storageHeaders() {
 export class StorageRequestError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
-export async function storageRequest<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+export async function storageRequest<T>(path: string, body?: unknown, signal?: AbortSignal, onRetry?: () => void): Promise<T> {
   const request = path === "/api/s3/admin/uploads" || /\/api\/s3\/admin\/uploads\/[^/]+\/(parts|complete)$/.test(path)
     ? uploadRequest : (url: string, init: RequestInit) => fetch(url, init);
   const res = await request(path, { method: body === undefined ? "GET" : "POST", headers: storageHeaders(),
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }), cache: "no-store", signal }, signal);
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }), cache: "no-store", signal }, signal, undefined, undefined, onRetry);
   const data = await res.json();
   if (!res.ok || !data.success) throw new StorageRequestError(res.status, data.message || "Storage request failed.");
   return data as T;
@@ -29,9 +29,15 @@ export type UploadSession = { uploadSessionId: string; assetId: string; partSize
 type CompletedPart = { partNumber: number; etag: string };
 type ResumeData = { key: string; requestKey: string; session?: UploadSession; parts: CompletedPart[] };
 const resumeKey = "s3-pilot-upload-v1";
+export type UploadProgress = { stage: "preparing" | "uploading" | "retrying" | "verifying" | "paused" | "failed"; assetId?: string; uploadedBytes: number; totalBytes: number; percent: number };
 
 export async function uploadS3File(file: File, courseId: string, batchId: string, signal: AbortSignal,
-  progress: (percent: number, sessionId: string) => void, options: { category?: S3Category; contentDate?: string; replacesAssetId?: string } = {}) {
+  progress: (percent: number, sessionId: string) => void, options: { category?: S3Category; contentDate?: string; replacesAssetId?: string; onStatus?: (status: UploadProgress) => void } = {}) {
+  let uploadedBytes = 0;
+  const activeAsset: { id?: string } = {};
+  const report = (stage: UploadProgress["stage"]) => options.onStatus?.({ stage, assetId: activeAsset.id, uploadedBytes, totalBytes: file.size, percent: Math.floor(uploadedBytes / file.size * 100) });
+  const retrying = () => report("retrying");
+  report("preparing");
   const category = options.category || "video";
   const contentDate = options.contentDate || localDate();
   // Fingerprint the selected file's ends to avoid accidentally resuming a different recording.
@@ -50,17 +56,25 @@ export async function uploadS3File(file: File, courseId: string, batchId: string
     filename: file.name, contentType: FILE_TYPES[file.name.split(".").pop()?.toLowerCase() || ""] || "application/octet-stream", byteSize: file.size,
     category, contentDate, replacesAssetId: options.replacesAssetId || "",
     courseId, batchId, idempotencyKey: state.requestKey,
-  }, signal);
+  }, signal, retrying);
   persist();
   const session = state.session;
+  activeAsset.id = session.assetId;
   if (session.status === "completed") {
-    const recovered = await storageRequest<{ asset?: { videoProcessingState?: string } }>(`/api/s3/admin/uploads/${session.uploadSessionId}/complete`, { parts: state.parts }, signal);
+    uploadedBytes = file.size;
+    report("verifying");
+    const recovered = await storageRequest<{ asset?: { videoProcessingState?: string } }>(`/api/s3/admin/uploads/${session.uploadSessionId}/complete`, { parts: state.parts }, signal, retrying);
     localStorage.removeItem(resumeKey);
     return { assetId: session.assetId, videoProcessingState: recovered.asset?.videoProcessingState };
   }
   const completed = new Map(state.parts.map((part) => [part.partNumber, part.etag]));
+  const reportProgress = () => {
+    uploadedBytes = [...completed.keys()].reduce((sum, n) => sum + Math.min(session.partSize, file.size - (n - 1) * session.partSize), 0);
+    progress(Math.floor(uploadedBytes / file.size * 100), session.uploadSessionId);
+    report("uploading");
+  };
   const pending = Array.from({ length: session.partCount }, (_, i) => i + 1).filter((n) => !completed.has(n));
-  progress(Math.floor(completed.size / session.partCount * 100), session.uploadSessionId);
+  reportProgress();
   let position = 0;
   let failed: unknown;
   const worker = async () => {
@@ -70,28 +84,30 @@ export async function uploadS3File(file: File, courseId: string, batchId: string
         let etag = "";
         for (let attempt = 0; attempt < 3; attempt++) {
           try {
-            const signed = await storageRequest<{ parts: { url: string }[] }>(`/api/s3/admin/uploads/${session.uploadSessionId}/parts`, { partNumbers: [number] }, signal);
-            const res = await uploadRequest(signed.parts[0].url, { method: "PUT", body: file.slice((number - 1) * session.partSize, Math.min(number * session.partSize, file.size)), credentials: "omit", referrerPolicy: "no-referrer" }, signal, 15 * 60_000);
+            const signed = await storageRequest<{ parts: { url: string }[] }>(`/api/s3/admin/uploads/${session.uploadSessionId}/parts`, { partNumbers: [number] }, signal, retrying);
+            const res = await uploadRequest(signed.parts[0].url, { method: "PUT", body: file.slice((number - 1) * session.partSize, Math.min(number * session.partSize, file.size)), credentials: "omit", referrerPolicy: "no-referrer" }, signal, 15 * 60_000, 1000, retrying);
             if (!res.ok) throw new Error("S3 rejected an upload part. Check bucket CORS and retry.");
             etag = res.headers.get("etag") || "";
             if (!etag) throw new Error("S3 did not expose ETag. Check the bucket CORS settings.");
             break;
           } catch (error) {
             if (signal.aborted || attempt === 2 || (error instanceof StorageRequestError && [400, 401, 403, 409, 413].includes(error.status))) throw error;
+            retrying();
             await new Promise((resolve) => setTimeout(resolve, (attempt + 1) * 1000));
           }
         }
         completed.set(number, etag);
         state.parts = [...completed].map(([partNumber, tag]) => ({ partNumber, etag: tag })).sort((a, b) => a.partNumber - b.partNumber);
         persist();
-        progress(Math.floor(completed.size / session.partCount * 100), session.uploadSessionId);
+        reportProgress();
       } catch (error) { failed = error; }
     }
   };
   await Promise.all([worker(), worker(), worker()]);
   if (failed) throw failed;
   if (signal.aborted) throw new DOMException("Upload paused", "AbortError");
-  const result = await storageRequest<{ asset?: { videoProcessingState?: string } }>(`/api/s3/admin/uploads/${session.uploadSessionId}/complete`, { parts: state.parts }, signal);
+  report("verifying");
+  const result = await storageRequest<{ asset?: { videoProcessingState?: string } }>(`/api/s3/admin/uploads/${session.uploadSessionId}/complete`, { parts: state.parts }, signal, retrying);
   localStorage.removeItem(resumeKey);
   return { assetId: session.assetId, videoProcessingState: result.asset?.videoProcessingState };
 }
