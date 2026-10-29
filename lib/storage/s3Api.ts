@@ -123,7 +123,11 @@ export const initUpload: Handler = async (req) => {
   if (existing) {
     const asset = await S3Asset.findOne(strictScope({ _id: existing.assetId }));
     if (!asset || asset.originalFilename !== input.filename || asset.byteSize !== input.byteSize || asset.courseId !== input.courseId || asset.batchId !== input.batchId || (asset.category || "video") !== input.category || (asset.contentDate && asset.contentDate !== input.contentDate) || (asset.replacesAssetId || "") !== input.replacesAssetId) throw new StorageError(409, "Request key was already used for a different upload.");
-    if (!["uploading", "completed"].includes(existing.status) || existing.expiresAt.getTime() <= Date.now()) throw new StorageError(409, "This upload cannot be resumed. Start a new upload.");
+    if (["initializing", "aborting"].includes(existing.status)) throw new StorageError(503, "Upload setup or cancellation is still in progress. Retry shortly.");
+    if (!["uploading", "completing", "completed"].includes(existing.status) || (existing.status !== "completed" && existing.expiresAt.getTime() <= Date.now())) {
+      return privateJson({ success: false, code: "UPLOAD_RESTART_REQUIRED", uploadSessionId: String(existing._id),
+        message: existing.status === "cancelled" ? "This upload was cancelled. Start a new upload with the same file." : "This upload expired or failed and cannot be resumed. Start a new upload." }, 409);
+    }
     return privateJson({ success: true, assetId: existing.assetId, uploadSessionId: String(existing._id), partSize: existing.partSize, partCount: existing.partCount, expiresAt: existing.expiresAt, status: existing.status });
   }
   if (input.replacesAssetId) {

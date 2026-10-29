@@ -12,6 +12,9 @@ async function main() {
     let releasePart, releaseComplete;
     let listCalls = 0;
     let failSync = false;
+    let cancelledSession = true;
+    let cancelledCleared = false;
+    const requestKeys = [];
     // Use a secure loopback origin so browser crypto.subtle is available.
     await page.route('http://localhost:3198/**', route => route.fulfill({ contentType: 'text/html', body: '<div id="root"></div>' }));
     await page.goto('http://localhost:3198');
@@ -20,7 +23,12 @@ async function main() {
       const p = new URL(route.request().url()).pathname;
       const json = data => route.fulfill({ json: { success: true, ...data } });
       if (p === '/api/s3/admin/assets') { listCalls++; if (failSync) return route.fulfill({ status: 503, json: { success: false } }); return json({ assets: [row], total: 1, hasMore: false }); }
-      if (p === '/api/s3/admin/uploads') return json({ assetId: 'asset1', uploadSessionId: 'session1', partCount: 1, partSize: 16, status: 'uploading' });
+      if (p === '/api/s3/admin/uploads') {
+        requestKeys.push(route.request().postDataJSON().idempotencyKey);
+        if (cancelledSession) return route.fulfill({ status: 409, json: { success: false, code: 'UPLOAD_RESTART_REQUIRED', uploadSessionId: 'cancelled-session', message: 'This upload was cancelled. Start a new upload with the same file.' } });
+        return json({ assetId: 'asset1', uploadSessionId: 'session1', partCount: 1, partSize: 16, status: 'uploading' });
+      }
+      if (p === '/api/s3/admin/uploads/cancelled-session/abort') { cancelledSession = false; cancelledCleared = true; return json({ status: 'cancelled' }); }
       if (p.endsWith('/parts')) return json({ parts: [{ url: 'http://localhost:3198/part' }] });
       if (p === '/part') { await new Promise(resolve => { releasePart = resolve; }); return route.fulfill({ body: '', headers: { ETag: 'test-etag' } }); }
       if (p.endsWith('/complete')) { await new Promise(resolve => { releaseComplete = resolve; }); row = { ...row, status: 'ready', videoProcessingState: 'queued' }; return json({ asset: { videoProcessingState: 'queued' } }); }
@@ -31,7 +39,11 @@ async function main() {
     await page.getByRole('button', { name: '+ Upload files' }).click();
     await page.locator('input[type=file]').setInputFiles({ name: 'lesson.mp4', mimeType: 'video/mp4', buffer: Buffer.from('123456') });
     await page.getByRole('button', { name: 'Upload / resume', exact: true }).click();
+    await page.getByText('Start a new upload', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Start new upload', exact: true }).click();
     await page.getByText('Uploading', { exact: true }).first().waitFor();
+    assert.equal(cancelledCleared, true);
+    assert.notEqual(requestKeys[0], requestKeys[1], 'restart uses a fresh idempotency key');
     await page.waitForFunction(() => document.querySelector('progress')?.value === 0);
     while (!releasePart) await new Promise(resolve => setTimeout(resolve, 10));
     releasePart();
@@ -51,7 +63,6 @@ async function main() {
     failSync = false;
     row.videoProcessingState = 'failed';
     await page.getByText('Needs attention', { exact: true }).waitFor({ timeout: 12000 });
-    await page.getByRole('button', { name: 'More actions for lesson.mp4' }).count();
     row.videoProcessingState = 'ready';
     await page.getByText('Ready to watch', { exact: true }).waitFor({ timeout: 12000 });
     assert.deepEqual(errors, []);

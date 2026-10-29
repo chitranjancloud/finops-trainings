@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+hcimport assert from "node:assert/strict";
 import { uploadS3File } from "../lib/storage/s3Client";
 
 async function main() {

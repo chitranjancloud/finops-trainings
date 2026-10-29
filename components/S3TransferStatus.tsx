@@ -7,6 +7,7 @@ const labels: Record<string, [string, string]> = {
   retrying: ["Connection interrupted — retrying", "Saved progress is safe. Retrying automatically."],
   verifying: ["Verifying upload", "All parts received. Checking the file before publication."],
   paused: ["Upload paused", "Select the same file and lesson date, then choose Upload / resume."],
+  restart: ["Start a new upload", "The previous session was cancelled, expired or failed. Select the file and choose Start new upload."],
   failed: ["Needs attention", "Check the message below. Resume upload or retry video processing."],
   initializing: ["Preparing upload", "Starting the upload session."],
   incomplete: ["Upload incomplete", "Select the original file and lesson date to resume in its upload browser."],
@@ -22,7 +23,7 @@ export default function S3TransferStatus({ state, transfer, compact = false }: {
 }) {
   const [label, detail] = labels[state] || [state, ""];
   const active = ["preparing", "uploading", "retrying", "verifying", "initializing", "queued", "processing"].includes(state);
-  const warning = ["failed", "retrying", "incomplete"].includes(state);
+  const warning = ["failed", "retrying", "incomplete", "restart"].includes(state);
   const Icon = state === "ready" ? CheckCircle2 : state === "paused" ? PauseCircle : warning ? AlertCircle : active ? LoaderCircle : AlertCircle;
   const bytes = (value: number) => value >= 1073741824 ? `${(value / 1073741824).toFixed(2)} GiB` : `${(value / 1048576).toFixed(1)} MiB`;
   return <div className={compact ? "min-w-[190px] max-w-xs space-y-1.5" : "space-y-2 rounded-xl border border-blue-100 bg-white p-4"}>

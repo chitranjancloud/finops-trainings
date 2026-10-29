@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { cancelSavedUpload, storageRequest, uploadS3File, type UploadProgress } from "@/lib/storage/s3Client";
+import { cancelSavedUpload, storageRequest, uploadS3File, StorageRequestError, type UploadProgress } from "@/lib/storage/s3Client";
 import { CATEGORY_LABELS, allowedExtensions, localDate, type S3Category, type S3PublicAsset } from "@/lib/storage/s3Types";
 import { FileText, Film, MoreHorizontal, RefreshCw, SlidersHorizontal } from "lucide-react";
 import S3AssetViewer from "./S3AssetViewer";
@@ -71,10 +71,11 @@ export default function S3UploadPanel({ courseId: selectedCourseId, batchId: sel
     if (!file || !courseId || !batchId || !contentDate) { setMessage("Select a file, lesson date and a saved course/batch first."); return; }
     setBusy(true); setMessage(""); const abort = new AbortController(); controller.current = abort;
     try {
+      if (transfer?.stage === "restart") await cancelSavedUpload();
       const result = await uploadS3File(file, courseId.trim(), batchId.trim(), abort.signal, () => {}, { category, contentDate, replacesAssetId: replacing?.assetId, onStatus: setTransfer });
       setMessage(result.videoProcessingState === "queued" ? "Upload verified. Follow the live video status below. Any previous recording stays available until preparation succeeds." : replacing ? "Replacement verified. The new file is available to students." : "Upload verified. File is available to this batch.");
       setTransfer(null); setReplacing(null); setFile(null); if (fileInput.current) fileInput.current.value = ""; await list();
-    } catch (error) { setTransfer(current => current ? { ...current, stage: abort.signal.aborted ? "paused" : "failed" } : null); setMessage(abort.signal.aborted ? "Paused. Use the same file, date and replacement selection to resume." : error instanceof Error ? error.message : "Upload failed."); }
+    } catch (error) { setTransfer(current => current ? { ...current, stage: abort.signal.aborted ? "paused" : error instanceof StorageRequestError && error.code === "UPLOAD_RESTART_REQUIRED" ? "restart" : "failed" } : null); setMessage(abort.signal.aborted ? "Paused. Use the same file, date and replacement selection to resume." : error instanceof Error ? error.message : "Upload failed."); }
     finally { setBusy(false); }
   };
   const remove = async (asset: S3PublicAsset) => {
@@ -95,7 +96,7 @@ export default function S3UploadPanel({ courseId: selectedCourseId, batchId: sel
     <div className="grid gap-3 sm:grid-cols-2"><label className="text-sm">Lesson date<input type="date" required disabled={busy} value={contentDate} onChange={(e) => setContentDate(e.target.value)} className="block w-full rounded border p-2" /></label>
       <label className="text-sm">{replacing ? "Replacement file" : "Select file"}<input ref={fileInput} disabled={busy} type="file" accept={allowedExtensions(category).map((s) => "." + s).join(",")} onChange={(e) => setFile(e.target.files?.[0] || null)} className="mt-2 block w-full text-sm" /></label></div>
     <p className="text-xs text-slate-500">{category === "video" ? "MP4 up to 10 GiB. With video processing enabled, uploading automatically prepares small segments. Each recording keeps one name and plays continuously in the admin preview and student view when ready." : "PDF, Office documents, TXT, CSV, ZIP and images where supported; up to 500 MiB. Office/ZIP files open as downloads."} Resume with the same source file and lesson date.</p>
-    <div className="flex flex-wrap gap-2 text-sm"><button type="button" disabled={busy || !file} onClick={upload} className="rounded-xl bg-blue-700 px-4 py-2 font-semibold text-white disabled:opacity-40">{replacing ? "Replace / resume" : "Upload / resume"}</button>
+    <div className="flex flex-wrap gap-2 text-sm"><button type="button" disabled={busy || !file} onClick={upload} className="rounded-xl bg-blue-700 px-4 py-2 font-semibold text-white disabled:opacity-40">{transfer?.stage === "restart" ? "Start new upload" : replacing ? "Replace / resume" : "Upload / resume"}</button>
       <button type="button" disabled={!busy} onClick={() => controller.current?.abort()} className="rounded-xl border px-3 py-2 disabled:opacity-40">Pause upload</button>
       <button type="button" disabled={busy} onClick={async () => { try { await cancelSavedUpload(); setTransfer(null); setMessage("Saved upload cancelled."); await list(page); } catch (e) { setMessage((e as Error).message); } }} className="rounded-xl border px-3 py-2 disabled:opacity-40">Cancel saved upload</button></div>
 

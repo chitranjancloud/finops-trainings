@@ -13,7 +13,7 @@ export function storageHeaders() {
   };
 }
 export class StorageRequestError extends Error {
-  constructor(public status: number, message: string) { super(message); }
+  constructor(public status: number, message: string, public code?: string, public uploadSessionId?: string) { super(message); }
 }
 export async function storageRequest<T>(path: string, body?: unknown, signal?: AbortSignal, onRetry?: () => void): Promise<T> {
   const request = path === "/api/s3/admin/uploads" || /\/api\/s3\/admin\/uploads\/[^/]+\/(parts|complete)$/.test(path)
@@ -21,7 +21,7 @@ export async function storageRequest<T>(path: string, body?: unknown, signal?: A
   const res = await request(path, { method: body === undefined ? "GET" : "POST", headers: storageHeaders(),
     ...(body === undefined ? {} : { body: JSON.stringify(body) }), cache: "no-store", signal }, signal, undefined, undefined, onRetry);
   const data = await res.json();
-  if (!res.ok || !data.success) throw new StorageRequestError(res.status, data.message || "Storage request failed.");
+  if (!res.ok || !data.success) throw new StorageRequestError(res.status, data.message || "Storage request failed.", data.code, data.uploadSessionId);
   return data as T;
 }
 
@@ -29,7 +29,7 @@ export type UploadSession = { uploadSessionId: string; assetId: string; partSize
 type CompletedPart = { partNumber: number; etag: string };
 type ResumeData = { key: string; requestKey: string; session?: UploadSession; parts: CompletedPart[] };
 const resumeKey = "s3-pilot-upload-v1";
-export type UploadProgress = { stage: "preparing" | "uploading" | "retrying" | "verifying" | "paused" | "failed"; assetId?: string; uploadedBytes: number; totalBytes: number; percent: number };
+export type UploadProgress = { stage: "preparing" | "uploading" | "retrying" | "verifying" | "paused" | "failed" | "restart"; assetId?: string; uploadedBytes: number; totalBytes: number; percent: number };
 
 export async function uploadS3File(file: File, courseId: string, batchId: string, signal: AbortSignal,
   progress: (percent: number, sessionId: string) => void, options: { category?: S3Category; contentDate?: string; replacesAssetId?: string; onStatus?: (status: UploadProgress) => void } = {}) {
@@ -52,15 +52,24 @@ export async function uploadS3File(file: File, courseId: string, batchId: string
   const persist = () => localStorage.setItem(resumeKey, JSON.stringify(state));
   persist();
   // Re-authorization and idempotent init are required even for a local resume record.
-  state.session = await storageRequest<UploadSession>("/api/s3/admin/uploads", {
+  try {
+    state.session = await storageRequest<UploadSession>("/api/s3/admin/uploads", {
     filename: file.name, contentType: FILE_TYPES[file.name.split(".").pop()?.toLowerCase() || ""] || "application/octet-stream", byteSize: file.size,
     category, contentDate, replacesAssetId: options.replacesAssetId || "",
     courseId, batchId, idempotencyKey: state.requestKey,
-  }, signal, retrying);
+    }, signal, retrying);
+  } catch (error) {
+    if (error instanceof StorageRequestError && error.code === "UPLOAD_RESTART_REQUIRED" && error.uploadSessionId) {
+      // Init can fail after creating a server session but before the browser saves its ID.
+      state.session = { uploadSessionId: error.uploadSessionId, assetId: state.session?.assetId || "", partSize: 0, partCount: 0, status: "restart-required", expiresAt: "" };
+      persist();
+    }
+    throw error;
+  }
   persist();
   const session = state.session;
   activeAsset.id = session.assetId;
-  if (session.status === "completed") {
+  if (["completed", "completing"].includes(session.status)) {
     uploadedBytes = file.size;
     report("verifying");
     const recovered = await storageRequest<{ asset?: { videoProcessingState?: string } }>(`/api/s3/admin/uploads/${session.uploadSessionId}/complete`, { parts: state.parts }, signal, retrying);

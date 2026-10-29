@@ -175,6 +175,39 @@ async function main() {
     bucket: "private-test", key: "tenant/test/video.mp4", byteSize: 1024, safeFilename: "test.mp4",
     toObject() { return { bucket: this.bucket, key: this.key }; }, async save() { saved++; } };
   Uploads.findOne = async () => upload;
+  await check("resume accepts completed session even after upload expiry", () => run(async () => {
+    upload.status = "completed"; upload.expiresAt = new Date(0);
+    const response = await api.initUpload(request({ ...valid, filename: "test.mp4" }), routeContext);
+    assert.equal(response.status, 200);
+    upload.status = "uploading"; upload.expiresAt = new Date(Date.now() + 3600000);
+  }));
+  await check("resume preserves completing session for finalization recovery", () => run(async () => {
+    upload.status = "completing";
+    const response = await api.initUpload(request({ ...valid, filename: "test.mp4" }), routeContext);
+    assert.equal((await response.json()).status, "completing");
+    upload.status = "uploading";
+  }));
+  await check("expired resume returns explicit restart instructions", () => run(async () => {
+    upload.expiresAt = new Date(0);
+    const response = await api.initUpload(request({ ...valid, filename: "test.mp4" }), routeContext);
+    assert.equal(response.status, 409);
+    const body = await response.json();
+    assert.equal(body.code, "UPLOAD_RESTART_REQUIRED");
+    assert.equal(body.uploadSessionId, uploadId);
+    upload.expiresAt = new Date(Date.now() + 3600000);
+  }));
+  await check("cancelled resume requires restart and repeated cancel is harmless", () => run(async () => {
+    upload.status = "cancelled";
+    const response = await api.initUpload(request({ ...valid, filename: "test.mp4" }), routeContext);
+    assert.equal((await response.json()).code, "UPLOAD_RESTART_REQUIRED");
+    assert.equal((await api.cancelUpload(request({}), routeContext)).status, 200);
+    upload.status = "uploading";
+  }));
+  await check("initializing upload returns retryable busy instead of destructive restart", () => run(async () => {
+    upload.status = "initializing";
+    await rejectsStatus(() => api.initUpload(request({ ...valid, filename: "test.mp4" }), routeContext), 503);
+    upload.status = "uploading";
+  }));
   Uploads.findOneAndUpdate = async (filter) => { assert.equal(filter.tenantId, tenant); return upload; };
   Uploads.updateOne = async () => ({ modifiedCount: 1 });
   let completedCalls = 0;
