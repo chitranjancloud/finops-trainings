@@ -1,0 +1,17 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["mediaconvert:CreateJob", "mediaconvert:GetJob", "mediaconvert:ListJobs", "mediaconvert:ListQueues", "mediaconvert:CancelJob"],
+      "Resource": "*",
+      "Condition": { "StringEquals": { "aws:RequestedRegion": "REPLACE_WITH_BUCKET_REGION" } }
+    },
+    {
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "REPLACE_WITH_MEDIACONVERT_SERVICE_ROLE_ARN",
+      "Condition": { "StringEquals": { "iam:PassedToService": "mediaconvert.amazonaws.com" } }
+    }
+  ]
+}

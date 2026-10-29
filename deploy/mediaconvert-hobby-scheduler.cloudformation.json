@@ -1,0 +1,142 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Hobby-compatible video job status trigger: application remains on Vercel; no video conversion in Lambda",
+  "Parameters": {
+    "DeploymentOrigin": {
+      "Type": "String",
+      "AllowedPattern": "https://[A-Za-z0-9.-]+",
+      "Description": "Production Vercel origin, without trailing slash or path"
+    },
+    "CronSecret": {
+      "Type": "String",
+      "NoEcho": true,
+      "MinLength": 32,
+      "MaxLength": 256,
+      "Description": "Same random CRON_SECRET configured in Vercel; never commit this value"
+    },
+    "ScheduleState": {
+      "Type": "String",
+      "Default": "DISABLED",
+      "AllowedValues": [
+        "ENABLED",
+        "DISABLED"
+      ],
+      "Description": "Enable after deploying the protected Vercel endpoint and environment variables"
+    }
+  },
+  "Resources": {
+    "TriggerRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+          }
+        ]
+      }
+    },
+    "Trigger": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Runtime": "nodejs22.x",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "TriggerRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 70,
+        "MemorySize": 128,
+        "Environment": {
+          "Variables": {
+            "DEPLOYMENT_ORIGIN": {
+              "Ref": "DeploymentOrigin"
+            },
+            "CRON_SECRET": {
+              "Ref": "CronSecret"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "exports.handler = async () => {\n  const endpoint = process.env.DEPLOYMENT_ORIGIN + '/api/internal/video-jobs';\n  const response = await fetch(endpoint, { headers: { authorization: 'Bearer ' + process.env.CRON_SECRET }, signal: AbortSignal.timeout(55000), redirect: 'error' });\n  if (!response.ok) { console.error('Video reconciliation failed', { status: response.status }); throw new Error('Reconcile HTTP ' + response.status); }\n  const data = await response.json();\n  console.info('Video reconciliation finished', { success: data.success, checked: data.checked });\n  return { success: data.success };\n};"
+        }
+      }
+    },
+    "Schedule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "ScheduleExpression": "rate(1 minute)",
+        "State": {
+          "Ref": "ScheduleState"
+        },
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "Trigger",
+                "Arn"
+              ]
+            },
+            "Id": "VideoJobStatusTrigger",
+            "RetryPolicy": {
+              "MaximumRetryAttempts": 1,
+              "MaximumEventAgeInSeconds": 300
+            }
+          }
+        ]
+      }
+    },
+    "InvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "Trigger"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "Schedule",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "AsyncRetry": {
+      "Type": "AWS::Lambda::EventInvokeConfig",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "Trigger"
+        },
+        "Qualifier": "$LATEST",
+        "MaximumRetryAttempts": 1,
+        "MaximumEventAgeInSeconds": 300
+      }
+    }
+  },
+  "Outputs": {
+    "TriggerFunction": {
+      "Value": {
+        "Ref": "Trigger"
+      }
+    },
+    "Schedule": {
+      "Value": {
+        "Ref": "Schedule"
+      }
+    }
+  }
+}

@@ -1,5 +1,5 @@
 /** Strict parser for our single-rendition FFmpeg VOD output, never arbitrary playlists. */
-export function parseVideoPlaylist(text: string) {
+export function parseVideoPlaylist(text: string, provider: "ffmpeg" | "mediaconvert" = "ffmpeg") {
   if (!text.startsWith("#EXTM3U") || !text.includes("#EXT-X-ENDLIST")) throw new Error("INVALID_PLAYLIST");
   const segments: { filename: string; duration: number }[] = [];
   let duration: number | undefined;
@@ -10,7 +10,8 @@ export function parseVideoPlaylist(text: string) {
       duration = Number(line.slice(8).split(",")[0]);
       if (!Number.isFinite(duration) || duration <= 0 || duration > 12) throw new Error("INVALID_PLAYLIST");
     } else if (line && !line.startsWith("#")) {
-      if (duration === undefined || !/^segment-\d{6}\.ts$/.test(line) || segments.some((s) => s.filename === line)) throw new Error("INVALID_PLAYLIST");
+      const validName = provider === "mediaconvert" ? /^stream_720p_?\d{5,8}\.ts$/.test(line) : /^segment-\d{6}\.ts$/.test(line);
+      if (duration === undefined || !validName || segments.some((s) => s.filename === line)) throw new Error("INVALID_PLAYLIST");
       segments.push({ filename: line, duration }); duration = undefined;
     } else if (/^#EXT-X-(KEY|MAP|STREAM-INF|MEDIA):/.test(line)) throw new Error("INVALID_PLAYLIST");
   }

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { ensureVideoJob, segmentationEnabled } from "@/lib/video/queue";
 import S3VideoJob from "@/models/S3VideoJob";
 import S3VideoSession from "@/models/S3VideoSession";
+import { assetJobStatuses } from "@/lib/video/jobStatus";
 import { Types } from "mongoose";
 import { withTenantContext, requireTenantId, TENANT_HOST_HEADER } from "@/lib/platform/runtime";
 import S3Asset, { type S3AssetRecord } from "@/models/S3Asset";
@@ -287,9 +288,10 @@ export const assetList: Handler = async (req) => {
   const visible = rows.slice(0, limit);
   const total = await S3Asset.countDocuments(filter);
   const uploads = await S3Upload.find(strictScope({ ownerId: String(user._id), assetId: { $in: visible.map((a) => String(a._id)) } }));
+  const progress = await assetJobStatuses(requireTenantId(), visible);
   return privateJson({ success: true, assets: visible.map((a) => {
     const upload = uploads.find((u) => u.assetId === String(a._id));
-    return { ...publicAsset(a), ...(upload ? { uploadSessionId: String(upload._id), uploadStatus: upload.status, uploadExpiresAt: upload.expiresAt } : {}) };
+    return { ...publicAsset(a), ...(progress.has(String(a._id)) ? { videoProgress: progress.get(String(a._id)) } : {}), ...(upload ? { uploadSessionId: String(upload._id), uploadStatus: upload.status, uploadExpiresAt: upload.expiresAt } : {}) };
   }), page, total, hasMore: rows.length > limit });
 };
 
@@ -332,7 +334,9 @@ export const studentAssets: Handler = async (req) => {
   const filter = strictScope({ batchId, courseId, status: "ready", ...listFilters(params) });
   const total = await S3Asset.countDocuments(filter);
   const rows = await S3Asset.find(filter).sort({ createdAt: -1 }).skip((page - 1) * 20).limit(21);
-  return privateJson({ success: true, assets: rows.slice(0, 20).map(publicAsset), page, total, hasMore: rows.length > 20 });
+  const visible = rows.slice(0, 20);
+  const progress = await assetJobStatuses(requireTenantId(), visible);
+  return privateJson({ success: true, assets: visible.map(a => ({ ...publicAsset(a), ...(progress.has(String(a._id)) ? { videoProgress: progress.get(String(a._id)) } : {}) })), page, total, hasMore: rows.length > 20 });
 };
 
 export const deleteAsset: Handler = async (req, context) => {
@@ -357,7 +361,7 @@ export const deleteAsset: Handler = async (req, context) => {
       return privateJson({ success: true, cleanupPending: true, message: "Student access removed. S3 cleanup failed; check DeleteObject/DeleteObjectVersion permissions and retry deletion from history." });
     }
     if (asset.videoProcessingState && asset.videoProcessingState !== "not-requested") {
-      return privateJson({ success: true, cleanupPending: true, message: "Student access removed. The video worker will clean up derived segments; keep the worker running." });
+      return privateJson({ success: true, cleanupPending: true, message: "Student access removed. Derived segments are queued for server cleanup." });
     }
     await S3Asset.updateOne(strictScope({ _id: asset._id, status: "deleted" }), { $set: { cleanupState: "done" } });
   }

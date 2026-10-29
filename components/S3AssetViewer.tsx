@@ -3,11 +3,12 @@ import { useState } from "react";
 import S3VideoPlayer from "./S3VideoPlayer";
 import { storageRequest } from "@/lib/storage/s3Client";
 import type { S3PublicAsset } from "@/lib/storage/s3Types";
+import S3TransferStatus from "./S3TransferStatus";
 type Grant = { url: string; filename: string; contentType: string; expiresAt: string };
 export default function S3AssetViewer({ asset }: { asset: S3PublicAsset }) {
   const [grant, setGrant] = useState<Grant | null>(null); const [error, setError] = useState(""); const [busy, setBusy] = useState(false);
   if (asset.contentType === "video/mp4") {
-    if (["queued", "processing"].includes(asset.videoProcessingState || "")) return <section aria-live="polite"><h4 className="font-semibold">{asset.filename}</h4><p className="mt-2 text-sm">Preparing video segments. This recording will be available here when processing finishes.</p></section>;
+    if (["queued", "processing"].includes(asset.videoProcessingState || "")) return <section aria-live="polite"><h4 className="mb-3 font-semibold">{asset.filename}</h4><S3TransferStatus state={asset.videoProcessingState!} job={asset.videoProgress} /></section>;
     if (asset.videoProcessingState === "failed") return <section role="alert"><h4 className="font-semibold">{asset.filename}</h4><p className="mt-2 text-sm">This recording could not be prepared. An administrator can retry video processing.</p></section>;
     return <S3VideoPlayer key={asset.assetId} assetId={asset.assetId} autoOpen />;
   }

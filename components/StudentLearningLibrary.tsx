@@ -5,6 +5,7 @@ import { ArrowLeft, BookOpen, CalendarDays, ChevronRight, ClipboardList, FileTex
 import { storageRequest, StorageRequestError } from "@/lib/storage/s3Client";
 import { S3_CATEGORIES, CATEGORY_LABELS, type S3Category, type S3PublicAsset } from "@/lib/storage/s3Types";
 import S3AssetViewer from "./S3AssetViewer";
+import S3TransferStatus from "./S3TransferStatus";
 
 const icons = { video: Film, pdf: FileText, "study-material": BookOpen, assignment: ClipboardList };
 function lessonDate(value: string) {
@@ -41,8 +42,10 @@ export default function StudentLearningLibrary({ batchId, onAvailabilityChange, 
 
   useEffect(() => {
     if (category !== "video" || disabled) return;
-    const timer = window.setInterval(() => { if (!document.hidden) setRefresh(value => value + 1); }, 10000);
-    return () => window.clearInterval(timer);
+    const timer = window.setInterval(() => { if (!document.hidden) setRefresh(value => value + 1); }, 5000);
+    const wake = () => { if (!document.hidden) setRefresh(value => value + 1); };
+    document.addEventListener("visibilitychange", wake); window.addEventListener("online", wake);
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", wake); window.removeEventListener("online", wake); };
   }, [category, disabled]);
 
   useEffect(() => {
@@ -111,7 +114,7 @@ export default function StudentLearningLibrary({ batchId, onAvailabilityChange, 
         const preparing = ["queued", "processing"].includes(asset.videoProcessingState || "");
         const failed = asset.videoProcessingState === "failed";
         const Icon = icons[asset.category] || FileText;
-        return <li key={asset.assetId} className="flex flex-wrap items-center gap-4 rounded-xl border border-white/[0.07] bg-white/[0.02] p-4 transition-colors hover:border-white/15 sm:flex-nowrap"><span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-400/10 text-blue-300"><Icon size={20} /></span><div className="min-w-0 flex-1"><p className="mb-1 text-xs text-slate-400">{category === "video" ? "Recording" : "Resource"} {String((page - 1) * 20 + index + 1).padStart(2, "0")}</p><p className="break-words text-sm font-medium leading-6 text-slate-100">{asset.filename}</p><p className="mt-1 text-xs text-slate-400">{lessonDate(asset.contentDate)} · {detail(asset)}</p></div><button type="button" disabled={preparing || failed} onClick={() => setSelected(asset)} className="inline-flex min-h-10 w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-400 disabled:cursor-default disabled:bg-white/5 disabled:text-slate-500 sm:w-auto">{!preparing && !failed && (category === "video" ? <Play size={13} fill="currentColor" /> : <ChevronRight size={15} />)}{preparing ? "Preparing video…" : failed ? "Video unavailable" : category === "video" ? "Watch lesson" : "Open resource"}</button></li>;
+        return <li key={asset.assetId} className="flex flex-wrap items-center gap-4 rounded-xl border border-white/[0.07] bg-white/[0.02] p-4 transition-colors hover:border-white/15 sm:flex-nowrap"><span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-400/10 text-blue-300"><Icon size={20} /></span><div className="min-w-0 flex-1"><p className="mb-1 text-xs text-slate-400">{category === "video" ? "Recording" : "Resource"} {String((page - 1) * 20 + index + 1).padStart(2, "0")}</p><p className="break-words text-sm font-medium leading-6 text-slate-100">{asset.filename}</p><p className="mt-1 text-xs text-slate-400">{lessonDate(asset.contentDate)} · {detail(asset)}</p>{(preparing || failed) && <div className="mt-2"><S3TransferStatus compact state={asset.videoProcessingState!} job={asset.videoProgress} /></div>}</div><button type="button" disabled={preparing || failed} onClick={() => setSelected(asset)} className="inline-flex min-h-10 w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-400 disabled:cursor-default disabled:bg-white/5 disabled:text-slate-500 sm:w-auto">{!preparing && !failed && (category === "video" ? <Play size={13} fill="currentColor" /> : <ChevronRight size={15} />)}{preparing ? "Preparing video…" : failed ? "Video unavailable" : category === "video" ? "Watch lesson" : "Open resource"}</button></li>;
       })}</ul>}
       {(page > 1 || hasMore) && <div className="flex items-center justify-between border-t border-white/[0.07] pt-4 text-xs text-slate-400"><button type="button" disabled={page === 1 || loading} onClick={() => { setLoading(true); setSelected(null); setSearch(""); setError(""); setPage(value => value - 1); }} className="min-h-10 rounded-lg px-3 hover:bg-white/5 disabled:opacity-30">Previous</button><span>Page {page}</span><button type="button" disabled={!hasMore || loading} onClick={() => { setLoading(true); setSelected(null); setSearch(""); setError(""); setPage(value => value + 1); }} className="min-h-10 rounded-lg px-3 hover:bg-white/5 disabled:opacity-30">Next</button></div>}
     </section>

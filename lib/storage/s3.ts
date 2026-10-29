@@ -85,6 +85,6 @@ export async function signAccess(ref: ObjectRef & { safeFilename: string; versio
   return { url, expiresAt: new Date(Date.now() + ttl * 1000).toISOString() };
 }
 
-export async function deleteStoredObject(ref: ObjectRef & { versionId?: string }) {
-  await s3Client().send(new DeleteObjectCommand({ Bucket: ref.bucket, Key: ref.key, VersionId: ref.versionId || undefined }));
+export async function deleteStoredObject(ref: ObjectRef & { versionId?: string }, signal?: AbortSignal) {
+  await s3Client().send(new DeleteObjectCommand({ Bucket: ref.bucket, Key: ref.key, VersionId: ref.versionId || undefined }), { abortSignal: signal });
 }

@@ -1,0 +1,88 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "FinOps MediaConvert service role: website remains on Vercel",
+  "Parameters": {
+    "MediaBucket": {
+      "Type": "String"
+    },
+    "TenantId": {
+      "Type": "String",
+      "AllowedPattern": "[a-fA-F0-9]{24}"
+    }
+  },
+  "Resources": {
+    "MediaConvertRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "mediaconvert.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
+                },
+                "ArnLike": {
+                  "aws:SourceArn": {
+                    "Fn::Sub": "arn:${AWS::Partition}:mediaconvert:${AWS::Region}:${AWS::AccountId}:*"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "TenantVideoInputOutput",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:GetObjectVersion"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:s3:::${MediaBucket}/tenant/${TenantId}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "s3:GetBucketLocation",
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:s3:::${MediaBucket}"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "s3:PutObject",
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:s3:::${MediaBucket}/tenant/${TenantId}/courses/*/batches/*/video/*/*/*/output/*"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "MediaConvertRoleArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "MediaConvertRole",
+          "Arn"
+        ]
+      }
+    }
+  }
+}

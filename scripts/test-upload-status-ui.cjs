@@ -22,7 +22,7 @@ async function main() {
     await page.route('http://localhost:3198/**', async route => {
       const p = new URL(route.request().url()).pathname;
       const json = data => route.fulfill({ json: { success: true, ...data } });
-      if (p === '/api/s3/admin/assets') { listCalls++; if (failSync) return route.fulfill({ status: 503, json: { success: false } }); return json({ assets: [row], total: 1, hasMore: false }); }
+      if (p === '/api/s3/admin/assets') { listCalls++; if (process.env.DEBUG_STATUS_TEST) console.log('fixture status', listCalls, row.videoProcessingState, row.videoProgress?.phase, failSync); if (failSync) return route.fulfill({ status: 503, json: { success: false } }); return json({ assets: [row], total: 1, hasMore: false }); }
       if (p === '/api/s3/admin/uploads') {
         requestKeys.push(route.request().postDataJSON().idempotencyKey);
         if (cancelledSession) return route.fulfill({ status: 409, json: { success: false, code: 'UPLOAD_RESTART_REQUIRED', uploadSessionId: 'cancelled-session', message: 'This upload was cancelled. Start a new upload with the same file.' } });
@@ -53,8 +53,15 @@ async function main() {
     releaseComplete();
     await page.getByText('Waiting to prepare video', { exact: true }).waitFor();
     row.videoProcessingState = 'processing';
-    await page.getByText('Preparing video', { exact: true }).waitFor({ timeout: 12000 });
+    await page.getByText('Preparing video', { exact: true }).waitFor({ timeout: 20000 });
+    row.videoProgress = { provider: 'mediaconvert', phase: 'encoding', percent: 38, downloadedBytes: 0, sourceBytes: 0, uploadedSegments: 0, totalSegments: 0, uploadedBytes: 0, workerAvailable: true };
+    await page.getByText('Converting video', { exact: true }).waitFor({ timeout: 12000 });
+    await page.getByText('38% overall', { exact: true }).waitFor();
+    row.videoProgress = { ...row.videoProgress, phase: 'verifying', percent: undefined, uploadedSegments: 128, totalSegments: 240 };
+    await page.getByText('Checking playback', { exact: true }).waitFor({ timeout: 12000 });
+    await page.getByText('128 of 240 segments verified', { exact: true }).waitFor();
     row.videoProcessingState = 'ready';
+    delete row.videoProgress;
     await page.getByText('Ready to watch', { exact: true }).waitFor({ timeout: 12000 });
     assert.ok(listCalls >= 4, 'background polling advances stages');
     failSync = true;
