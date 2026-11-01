@@ -354,17 +354,8 @@ export default function SignupPage() {
         transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
         className="relative z-10 w-full max-w-md"
       >
-        {/* Logo / brand */}
+        {/* Signup heading */}
         <div className="text-center mb-8">
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="inline-flex items-center gap-2.5 bg-gradient-to-r from-[#2563eb]/20 to-[#7c3aed]/20 border border-[#2563eb]/30 rounded-2xl px-5 py-2.5 mb-4"
-          >
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#2563eb] to-[#7c3aed] flex items-center justify-center text-xs font-bold">F</div>
-            <span className="font-semibold text-slate-200 tracking-wide text-sm">FinOps Trainings</span>
-          </motion.div>
           <h1 className="text-3xl font-bold text-white mb-1 tracking-tight">Create your account</h1>
           <p className="text-slate-400 text-sm">Join thousands of professionals upskilling with FinOps</p>
         </div>

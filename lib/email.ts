@@ -27,12 +27,6 @@ function getEmailFrom() {
   );
 }
 
-function isTruthyEnv(value?: string) {
-  if (!value) return false;
-  const v = value.trim().toLowerCase();
-  return !(v === "" || v === "false" || v === "0" || v === "null" || v === "undefined");
-}
-
 async function sendViaResend(args: SendEmailArgs) {
   try {
     const resend = getResendClient();
@@ -60,25 +54,29 @@ async function sendViaResend(args: SendEmailArgs) {
 }
 
 async function sendViaSmtp(args: SendEmailArgs) {
+  let transporter;
   try {
     const host = process.env.SMTP_HOST;
     const port = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : undefined;
-    const secure = isTruthyEnv(process.env.SMTP_SECURE);
     const user = process.env.SMTP_USER;
     const pass = process.env.SMTP_PASS;
-
     if (!host || !port || !user || !pass) return false;
 
-    const transporter = nodemailer.createTransport({
+    const secure = port === 587 ? false : port === 465 ||
+      ["true", "1"].includes(process.env.SMTP_SECURE?.trim().toLowerCase() || "");
+    transporter = nodemailer.createTransport({
       host,
       port,
       secure,
+      requireTLS: port === 587,
+      tls: { minVersion: "TLSv1.2" },
+      connectionTimeout: 30000,
+      greetingTimeout: 30000,
+      socketTimeout: 60000,
       auth: { user, pass },
     });
-
-    const from = getEmailFrom();
     await transporter.sendMail({
-      from,
+      from: getEmailFrom(),
       to: args.to,
       subject: args.subject,
       html: args.html,
@@ -88,8 +86,16 @@ async function sendViaSmtp(args: SendEmailArgs) {
 
     return true;
   } catch (error) {
-    console.log("SMTP EMAIL EXCEPTION:", error);
+    const smtpError = error as Error & { code?: string; responseCode?: number; command?: string };
+    console.log("SMTP EMAIL EXCEPTION:", {
+      message: "SMTP failed",
+      code: smtpError.code,
+      responseCode: smtpError.responseCode,
+      command: smtpError.command,
+    });
     return false;
+  } finally {
+    transporter?.close();
   }
 }
 

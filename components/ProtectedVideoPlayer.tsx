@@ -8,6 +8,8 @@ import {
   Play,
   RotateCcw,
   RotateCw,
+  Volume2,
+  VolumeX,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -58,6 +60,18 @@ export default function ProtectedVideoPlayer({
   const [watermarkIndex, setWatermarkIndex] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [zoom, setZoom] = useState(ZOOM_MIN);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [volume, setVolume] = useState(1);
+  const [muted, setMuted] = useState(false);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.defaultPlaybackRate = playbackRate;
+    video.playbackRate = playbackRate;
+    video.volume = volume;
+    video.muted = muted;
+  }, [src, playbackRate, volume, muted]);
 
   useEffect(() => {
     setPlaying(false);
@@ -243,7 +257,17 @@ export default function ProtectedVideoPlayer({
         onLoadedMetadata={() => {
           const video = videoRef.current;
           if (!video) return;
+          video.playbackRate = playbackRate;
           setDuration(Number.isFinite(video.duration) ? video.duration : 0);
+        }}
+        onRateChange={() => {
+          if (videoRef.current) setPlaybackRate(videoRef.current.playbackRate);
+        }}
+        onVolumeChange={() => {
+          const video = videoRef.current;
+          if (!video) return;
+          setVolume(video.volume);
+          setMuted(video.muted);
         }}
         onTimeUpdate={() => {
           if (scrubbingRef.current) return;
@@ -326,7 +350,7 @@ export default function ProtectedVideoPlayer({
           />
         </div>
 
-        <div className="flex items-center gap-1.5 sm:gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
           <button
             type="button"
             onClick={seekBack}
@@ -359,6 +383,52 @@ export default function ProtectedVideoPlayer({
           <div className="ml-1 min-w-0 flex-1 truncate text-[11px] tabular-nums text-white/85 sm:text-xs">
             {formatVideoTime(currentTime)} / {formatVideoTime(duration)}
           </div>
+
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                if (muted || volume === 0) {
+                  if (volume === 0) setVolume(1);
+                  setMuted(false);
+                } else {
+                  setMuted(true);
+                }
+              }}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/90 hover:bg-white/10"
+              aria-label={muted || volume === 0 ? "Unmute" : "Mute"}
+              aria-pressed={muted || volume === 0}
+            >
+              {muted || volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
+            </button>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={muted ? 0 : volume}
+              onChange={(event) => {
+                setVolume(Number(event.target.value));
+                setMuted(false);
+              }}
+              aria-label="Volume"
+              aria-valuetext={`${Math.round((muted ? 0 : volume) * 100)}%`}
+              className="h-8 w-16 cursor-pointer accent-blue-500 sm:w-20"
+            />
+          </div>
+
+          <select
+            aria-label="Playback speed"
+            value={playbackRate}
+            onChange={(event) => setPlaybackRate(Number(event.target.value))}
+            className="h-8 rounded-md border border-white/20 bg-black/80 px-1 text-xs text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400"
+          >
+            {[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((rate) => (
+              <option key={rate} value={rate}>
+                {rate}x
+              </option>
+            ))}
+          </select>
 
           <button
             type="button"
