@@ -3,14 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Calendar, Clock, ChevronLeft, ChevronRight, CreditCard } from "lucide-react";
-import { notify } from "@/components/Feedback";
-import Link from "next/link";
+import { defaultWebinars } from "@/lib/defaultHomepageContent";
 
 export default function Webinars() {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [webinars, setWebinars] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
+  const [webinars, setWebinars] = useState(defaultWebinars);
 
   useEffect(() => {
     let isMounted = true;
@@ -19,7 +16,6 @@ export default function Webinars() {
       try {
         const res = await fetch("/api/webinars", { cache: "no-store" });
         const data = await res.json();
-        if (!res.ok || !data.success) throw new Error("Unavailable");
 
         if (
           isMounted &&
@@ -27,11 +23,11 @@ export default function Webinars() {
           Array.isArray(data.webinars) &&
           data.webinars.length > 0
         ) {
-          setWebinars(data.webinars.filter((item: any) => { const date = Date.parse(item.date); return Number.isFinite(date) && date + 86400000 > Date.now(); }));
+          setWebinars(data.webinars);
         }
       } catch (error) {
-        if (isMounted) setFailed(true);
-      } finally { if (isMounted) setLoading(false); }
+        console.log(error);
+      }
     };
 
     fetchWebinars();
@@ -45,7 +41,7 @@ export default function Webinars() {
     const user = localStorage.getItem("user");
 
     if (!user) {
-      notify("Please login first");
+      alert("Please login first");
       window.location.href = "/login";
       return;
     }
@@ -56,13 +52,13 @@ export default function Webinars() {
     const whatsapp = prompt("Enter your WhatsApp number for payment receipt");
 
     if (!sessionToken || !deviceId) {
-      notify("Please login again");
+      alert("Please login again");
       window.location.href = "/login";
       return;
     }
 
     if (!whatsapp || whatsapp.trim().length < 8) {
-      notify("WhatsApp number is required");
+      alert("WhatsApp number is required");
       return;
     }
 
@@ -85,7 +81,7 @@ export default function Webinars() {
       const paymentData = await paymentRes.json();
 
       if (!paymentData.success) {
-        notify(paymentData.message || "Payment could not start");
+        alert(paymentData.message || "Payment could not start");
         return;
       }
 
@@ -108,9 +104,9 @@ export default function Webinars() {
         const data = await res.json();
 
         if (data.success) {
-          notify("Payment successful. Webinar seat reserved.");
+          alert("Payment successful. Webinar seat reserved.");
         } else {
-          notify(data.message || "Payment verification failed");
+          alert(data.message || "Payment verification failed");
         }
       };
 
@@ -137,7 +133,7 @@ export default function Webinars() {
       await confirmPayment();
     } catch (err) {
       console.error(err);
-      notify("Something went wrong");
+      alert("Something went wrong");
     }
   };
 
@@ -167,22 +163,21 @@ export default function Webinars() {
           </div>
 
           <div className="flex gap-3">
-            <button aria-label="Previous webinars" onClick={() => scroll("left")} className="p-3 bg-white/10 rounded-xl">
+            <button onClick={() => scroll("left")} className="p-3 bg-white/10 rounded-xl">
               <ChevronLeft />
             </button>
-            <button aria-label="Next webinars" onClick={() => scroll("right")} className="p-3 bg-white/10 rounded-xl">
+            <button onClick={() => scroll("right")} className="p-3 bg-white/10 rounded-xl">
               <ChevronRight />
             </button>
           </div>
         </div>
 
-        {webinars.length === 0 && <div role="status" className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm leading-7 text-slate-300">{loading ? "Loading upcoming webinars…" : failed ? "The webinar schedule is temporarily unavailable." : "New webinar dates will be announced here."} {!loading && <Link href="/contact" className="ml-2 font-semibold text-blue-300 underline">Ask about upcoming sessions</Link>}</div>}
         <div ref={scrollRef} className="flex gap-6 overflow-x-auto pb-4">
           {webinars.map((item: any, i) => (
             <motion.div
               key={item._id || i}
               whileHover={{ y: -10 }}
-              className="min-w-[min(320px,85vw)] p-8 rounded-3xl bg-white/5 border border-white/10"
+              className="min-w-[350px] p-8 rounded-3xl bg-white/5 border border-white/10"
             >
               <div className="flex items-center gap-4 mb-6">
                 <img

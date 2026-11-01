@@ -78,7 +78,7 @@ export async function PUT(req: Request, { params }: any) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
 
-    const updated = await Blog.findByIdAndUpdate(params.id, payload(body), { new: true });
+    const updated = await Blog.findByIdAndUpdate(params.id, payload(body), { returnDocument: 'after' });
     return NextResponse.json({ success: true, blog: updated });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });

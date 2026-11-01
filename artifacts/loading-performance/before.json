@@ -1,0 +1,24 @@
+{
+  "stage": "before",
+  "requests": 16,
+  "apiRequests": 6,
+  "extraPageDownloads": 10,
+  "paths": [
+    "/api/courses",
+    "/api/webinars",
+    "/learning/live-online-training",
+    "/learning/classroom-training",
+    "/learning/one-on-one-training",
+    "/",
+    "/about",
+    "/contact",
+    "/internship-program",
+    "/job-assistance",
+    "/partners",
+    "/feedback",
+    "/api/hero-banners",
+    "/api/courses",
+    "/api/testimonials",
+    "/api/webinars"
+  ]
+}

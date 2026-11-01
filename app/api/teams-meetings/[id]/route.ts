@@ -48,7 +48,7 @@ export async function PUT(req: Request, { params }: any) {
         endsAt: body.endsAt ? new Date(body.endsAt) : undefined,
         isActive: body.isActive !== false,
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     return NextResponse.json({ success: true, meeting });

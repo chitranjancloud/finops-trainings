@@ -88,11 +88,7 @@ export async function GET(req: Request) {
     if (resourceId) query.resourceId = resourceId;
     if (user.role !== "admin") query.userId = String(user._id);
 
-    const submissionQuery = AssessmentSubmission.find(query).sort({ createdAt: -1 });
-    if (searchParams.get("view") === "dashboard" && format === "json") {
-      submissionQuery.select("batchId resourceId resourceType");
-    }
-    const submissions = await submissionQuery.lean();
+    const submissions = await AssessmentSubmission.find(query).sort({ createdAt: -1 });
 
     if (format === "excel" && user.role === "admin") {
       const batch = batchId ? await Batch.findById(batchId) : null;

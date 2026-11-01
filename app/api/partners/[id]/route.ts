@@ -22,7 +22,7 @@ export async function PUT(
         displayOrder: Number(body.displayOrder) || 0,
       },
       {
-        new: true,
+        returnDocument: 'after',
       }
     );
 

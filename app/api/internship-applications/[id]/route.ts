@@ -54,7 +54,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         reviewedAt: new Date(),
         reviewedBy: String(admin._id),
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!application) {

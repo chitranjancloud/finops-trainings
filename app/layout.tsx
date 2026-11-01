@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-import SiteChrome from "@/components/SiteChrome";
-import Feedback from "@/components/Feedback";
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
+import Chatbot from "@/components/Chatbot";
+import WhatsAppButton from "@/components/WhatsAppButton";
 
 import Script from "next/script";
 
@@ -88,11 +91,33 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
 
+      {/* âœ… FIX: ADD HEAD */}
+      <head>
+        <Script
+          src="https://checkout.razorpay.com/v1/checkout.js"
+          strategy="beforeInteractive"
+        />
+      </head>
 
       <body className="min-h-full flex flex-col">
-        <SiteChrome>{children}</SiteChrome>
-        <Feedback />
-        <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="afterInteractive" />
+        <Script id="disable-context-menu" strategy="afterInteractive">
+          {`
+            document.addEventListener("contextmenu", function (event) {
+              event.preventDefault();
+            });
+          `}
+        </Script>
+
+        <Navbar />
+
+        <main className="flex-1">
+          {children}
+        </main>
+
+        <Footer />
+        <WhatsAppButton />
+        <Chatbot />
+        <Analytics />
       </body>
     </html>
   );

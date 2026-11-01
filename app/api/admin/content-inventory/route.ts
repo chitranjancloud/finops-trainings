@@ -305,7 +305,7 @@ export async function POST(req: Request) {
     };
 
     const inventory = existing
-      ? await ContentInventory.findByIdAndUpdate(existing._id, payload, { new: true })
+      ? await ContentInventory.findByIdAndUpdate(existing._id, payload, { returnDocument: 'after' })
       : await ContentInventory.create(payload);
 
     return NextResponse.json({

@@ -23,7 +23,7 @@ export async function PUT(
           status: body.status || "approved",
         },
         {
-          new: true,
+          returnDocument: 'after',
         }
       );
 
@@ -63,7 +63,7 @@ export async function PATCH(
         reviewedAt: new Date(),
       },
       {
-        new: true,
+        returnDocument: 'after',
       }
     );
 

@@ -13,6 +13,7 @@ import {
 import { serveInWebsitePreviewHtml } from "@/lib/contentPreview";
 import { connectDB } from "@/lib/mongodb";
 import { fetchSharePointFile } from "@/lib/sharepoint";
+import { directSharePointVideoEnabled, redirectToSharePointVideo } from "@/lib/video/sharePointDelivery";
 import { withTenantContext } from "@/lib/platform/runtime";
 
 export const runtime = "nodejs";
@@ -125,6 +126,13 @@ export const GET = withTenantContext(async (req: Request) => {
         fallbackProxyPath,
         req,
       });
+    }
+
+    if (
+      directSharePointVideoEnabled() &&
+      (resourceType === "video" || viewableKindFromName(filename) === "video")
+    ) {
+      return await redirectToSharePointVideo(driveId, itemId);
     }
 
     const fileRes = await fetchSharePointFile(driveId, itemId, req.headers.get("range"));

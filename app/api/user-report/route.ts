@@ -186,19 +186,19 @@ export const GET = withTenantContext(async (req: Request) => {
           withTenantScope({
             $or: [{ userId }, { email: user.email }],
           })
-        ).sort({ createdAt: -1 }).lean(),
+        ).sort({ createdAt: -1 }),
 
         StudentActivity.find(withTenantScope({ userId })).sort({
           loginAt: -1,
-        }).lean(),
+        }),
 
-        Course.find(withTenantScope()).select("slug title price duration videos._id videos.url videos.webUrl pdfs._id pdfs.url pdfs.webUrl materials._id materials.url materials.webUrl").lean(),
+        Course.find(withTenantScope()),
 
-        LessonProgress.find(withTenantScope({ userId })).lean(),
+        LessonProgress.find(withTenantScope({ userId })),
 
         ContentAccessLog.find(withTenantScope({ userId })).sort({
           accessedAt: 1,
-        }).select("batchId materialId accessedAt").lean(),
+        }),
       ]);
 
     /* ── Deduplicate enrollments ───────────────────────────────────────────
@@ -277,12 +277,19 @@ export const GET = withTenantContext(async (req: Request) => {
       ),
     ];
 
-    const [batches, inventoryRecords] = assignedBatchIds.length > 0
-      ? await Promise.all([
-          Batch.find(withTenantScope({ _id: { $in: assignedBatchIds } })).select("materials").lean(),
-          ContentInventory.find(withTenantScope({ batchId: { $in: assignedBatchIds } })).select("batchId fileName url webUrl").lean(),
-        ])
-      : [[], []];
+    const batches =
+      assignedBatchIds.length > 0
+        ? await Batch.find(
+            withTenantScope({ _id: { $in: assignedBatchIds } })
+          )
+        : [];
+
+    const inventoryRecords =
+      assignedBatchIds.length > 0
+        ? await ContentInventory.find(
+            withTenantScope({ batchId: { $in: assignedBatchIds } })
+          )
+        : [];
 
     const inventoryByBatch = new Map<string, any[]>();
     for (const item of inventoryRecords) {

@@ -21,7 +21,7 @@ export async function PUT(req: Request, { params }: any) {
       update.batchBlockReason = body.batchBlocked ? body.batchBlockReason || "" : "";
     }
 
-    const updatedEnrollment = await Enrollment.findByIdAndUpdate(params.id, update, { new: true });
+    const updatedEnrollment = await Enrollment.findByIdAndUpdate(params.id, update, { returnDocument: 'after' });
 
     if (updatedEnrollment?.paymentId) {
       await Payment.findByIdAndUpdate(updatedEnrollment.paymentId, {

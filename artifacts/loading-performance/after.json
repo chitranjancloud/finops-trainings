@@ -1,0 +1,12 @@
+{
+  "stage": "after",
+  "requests": 4,
+  "apiRequests": 4,
+  "extraPageDownloads": 0,
+  "paths": [
+    "/api/hero-banners",
+    "/api/courses",
+    "/api/testimonials",
+    "/api/webinars"
+  ]
+}

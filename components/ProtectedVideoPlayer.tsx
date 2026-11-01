@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useVideoSource } from "@/lib/video/useVideoSource";
 import {
   Maximize,
   Minimize,
@@ -21,18 +20,11 @@ import {
 
 type ProtectedVideoPlayerProps = {
   src: string;
-  sourceMode?: "mp4" | "hls";
   className?: string;
   onEnded?: () => void;
   onError?: () => void;
   watermarkLabel?: string;
   tenantLabel?: string;
-  /** Opt-in for S3 URL renewal. Legacy callers retain source-reset behavior. */
-  preserveOnSourceChange?: boolean;
-  resumeAt?: number;
-  resumePlaying?: boolean;
-  onPlaybackState?: (time: number, playing: boolean) => void;
-  onBeforePlay?: () => Promise<boolean>;
 };
 
 const SEEK_SECONDS = VIDEO_SEEK_SECONDS;
@@ -48,21 +40,14 @@ const WATERMARK_POSITIONS = [
 
 export default function ProtectedVideoPlayer({
   src,
-  sourceMode = "mp4",
   className = "",
   onEnded,
   onError,
   watermarkLabel = "",
   tenantLabel = "",
-  preserveOnSourceChange = false,
-  resumeAt = 0,
-  resumePlaying = false,
-  onPlaybackState,
-  onBeforePlay,
 }: ProtectedVideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  useVideoSource(videoRef, src, sourceMode, onError);
   const progressRef = useRef<HTMLDivElement>(null);
   const scrubbingRef = useRef(false);
   const pendingSeekRef = useRef<number | null>(null);
@@ -75,7 +60,6 @@ export default function ProtectedVideoPlayer({
   const [zoom, setZoom] = useState(ZOOM_MIN);
 
   useEffect(() => {
-    if (preserveOnSourceChange) return;
     setPlaying(false);
     setCurrentTime(0);
     setDuration(0);
@@ -83,15 +67,7 @@ export default function ProtectedVideoPlayer({
     setZoom(ZOOM_MIN);
     scrubbingRef.current = false;
     pendingSeekRef.current = null;
-  }, [src, preserveOnSourceChange]);
-
-  useEffect(() => {
-    // A renewed src with preload=none otherwise waits indefinitely for Play,
-    // even if the student was already watching when access was renewed.
-    if (preserveOnSourceChange && resumePlaying) {
-      void videoRef.current?.play().catch(() => setPlaying(false));
-    }
-  }, [src, preserveOnSourceChange, resumePlaying]);
+  }, [src]);
 
   useEffect(() => {
     const syncFullscreen = () => {
@@ -161,9 +137,8 @@ export default function ProtectedVideoPlayer({
     if (!video) return;
 
     if (video.paused) {
-      if (onBeforePlay && !(await onBeforePlay())) return;
-      try { await video.play(); setPlaying(true); }
-      catch { setPlaying(false); }
+      await video.play();
+      setPlaying(true);
     } else {
       video.pause();
       setPlaying(false);
@@ -255,8 +230,8 @@ export default function ProtectedVideoPlayer({
       >
       <video
         ref={videoRef}
-        key={preserveOnSourceChange ? "renewable-source" : src}
-        src={sourceMode === "hls" ? undefined : src}
+        key={src}
+        src={src}
         preload="none"
         playsInline
         controls={false}
@@ -269,24 +244,18 @@ export default function ProtectedVideoPlayer({
           const video = videoRef.current;
           if (!video) return;
           setDuration(Number.isFinite(video.duration) ? video.duration : 0);
-          if (preserveOnSourceChange) {
-            video.currentTime = clampSeekTarget(resumeAt, video.duration);
-            setCurrentTime(video.currentTime);
-            if (resumePlaying) void video.play().catch(() => setPlaying(false));
-          }
         }}
         onTimeUpdate={() => {
           if (scrubbingRef.current) return;
           const video = videoRef.current;
           if (!video) return;
           setCurrentTime(video.currentTime);
-          onPlaybackState?.(video.currentTime, !video.paused);
           if (Number.isFinite(video.duration) && video.duration > 0) {
             setDuration(video.duration);
           }
         }}
-        onPlay={() => { setPlaying(true); onPlaybackState?.(videoRef.current?.currentTime || 0, true); }}
-        onPause={() => { setPlaying(false); onPlaybackState?.(videoRef.current?.currentTime || 0, false); }}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
         onEnded={() => {
           setPlaying(false);
           onEnded?.();

@@ -147,7 +147,7 @@ export async function PUT(req: Request, { params }: any) {
     }
 
     const oldBatch = await Batch.findById(params.id);
-    const batch = await Batch.findByIdAndUpdate(params.id, data, { new: true });
+    const batch = await Batch.findByIdAndUpdate(params.id, data, { returnDocument: 'after' });
 
     // If batch name changed, update enrollment records (backward compat)
     if (oldBatch && oldBatch.name !== name) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
@@ -22,7 +22,6 @@ import {
   Plus,
   Save,
   Search,
-  Settings,
   Share2,
   Trash2,
   Trophy,
@@ -36,7 +35,6 @@ import {
   X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import S3UploadPanel from "@/components/S3UploadPanel";
 import AdminNotificationBadge from "@/components/AdminNotificationBadge";
 import { buildStructuredSharePointFolderPath } from "@/lib/sharepoint";
 
@@ -242,15 +240,6 @@ export default function BatchesPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [form, setForm] = useState<Batch>(emptyBatch);
   const [selectedId, setSelectedId] = useState("");
-  const batchListRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const list = batchListRef.current;
-    const selected = list?.querySelector<HTMLElement>('[aria-current="true"]');
-    if (list && selected) {
-      const offset = selected.getBoundingClientRect().top - list.getBoundingClientRect().top;
-      if (offset < 0 || offset + selected.offsetHeight > list.clientHeight) list.scrollTo({ top: list.scrollTop + offset, behavior: "smooth" });
-    }
-  }, [selectedId]);
   const [search, setSearch] = useState("");
   const [courseFilter, setCourseFilter] = useState("");
   const [loading, setLoading] = useState(true);
@@ -281,7 +270,7 @@ export default function BatchesPage() {
   } | null>(null);
   const [sharePointFiles, setSharePointFiles] = useState<any[]>([]);
   const [pickerLoading, setPickerLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<"content" | "tests" | "assignments" | "notices" | "faculty" | "students" | "settings">("content");
+  const [activeTab, setActiveTab] = useState<"content" | "tests" | "assignments" | "notices" | "faculty" | "students">("content");
 
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
@@ -882,21 +871,44 @@ export default function BatchesPage() {
   return (
     <div className="min-h-screen bg-[#f4f7fb] flex">
       {/* Sidebar */}
+      <aside className="w-[250px] bg-white border-r border-gray-200 flex flex-col justify-between fixed h-screen overflow-y-auto">
+        <div>
+          <div className="px-8 py-10">
+            <h1 className="text-4xl font-bold text-blue-500">FinOps</h1>
+          </div>
+          <nav className="px-4 space-y-2">
+            <SidebarLink href="/admin-page" icon={<BookOpen size={22} />} text="Courses" />
+            <SidebarLink active href="/admin-page/batches" icon={<Briefcase size={22} />} text="Batches" />
+            <SidebarLink href="/admin-page/notifications" icon={<Bell size={22} />} text="Notifications" badge={<AdminNotificationBadge />} />
+            <SidebarLink href="/admin-page/tests" icon={<GraduationCap size={22} />} text="Tests" />
+            <SidebarLink href="/admin-page/assignments" icon={<FileText size={22} />} text="Assignments" />
+            <SidebarLink href="/admin-page/content" icon={<FileText size={22} />} text="Content" />
+            <SidebarLink href="/admin-page/chats" icon={<MessageCircle size={22} />} text="Chats" />
+            <SidebarLink href="/admin-page/people" icon={<Users size={22} />} text="People" />
+          </nav>
+        </div>
+        <div className="p-5">
+          <div className="bg-gradient-to-r from-[#2563eb] to-[#1a4fd6] rounded-3xl p-5 text-white">
+            <HelpCircle size={24} />
+            <h2 className="text-xl font-semibold mt-3">Batch Control</h2>
+            <p className="text-sm opacity-90 mt-2">Multiple batches per course. Batch-specific access control.</p>
+          </div>
+        </div>
+      </aside>
 
-
-      <main className="flex-1 min-w-0  p-4 lg:p-8 overflow-y-auto">
+      <main className="flex-1 ml-[250px] p-8 overflow-y-auto">
         {/* Header */}
-        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-6">
+        <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6 mb-8">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.28em] text-[#4d8bff]">Batch Management System</p>
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900 mt-2">Batches</h1>
-            <p className="text-slate-500 mt-2 text-sm">
-              Manage your batches, students, and learning resources in one place.
+            <h1 className="text-5xl font-bold text-gray-900 mt-3">Batches</h1>
+            <p className="text-gray-500 mt-3 text-lg">
+              Create multiple batches per course. Each batch has its own students, content, tests, and access control.
             </p>
           </div>
           <button
             onClick={() => setShowNewBatchModal(true)}
-            className="bg-gradient-to-r from-[#2563eb] to-[#1a4fd6] hover:bg-blue-600 transition text-white px-5 py-3 rounded-xl font-semibold flex items-center gap-3 w-fit"
+            className="bg-gradient-to-r from-[#2563eb] to-[#1a4fd6] hover:bg-blue-600 transition text-white px-7 py-4 rounded-2xl font-semibold flex items-center gap-3 w-fit"
           >
             <Plus size={20} />
             New Batch
@@ -904,19 +916,18 @@ export default function BatchesPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-8">
           <StatCard title="Total Batches" value={batches.length} />
           <StatCard title="Courses with Batches" value={groupedByCourse.length} />
           <StatCard title="Total Tests" value={batches.reduce((s, b) => s + b.tests.length, 0)} />
           <StatCard title="Total Assignments" value={batches.reduce((s, b) => s + b.assignments.length, 0)} />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)] gap-5 items-start">
+        <div className="grid grid-cols-1 2xl:grid-cols-[380px_1fr] gap-8">
           {/* Left Panel: Batch List */}
-          <section className="space-y-3 lg:sticky lg:top-6">
-            <div className="flex items-center justify-between px-1"><h2 className="text-sm font-semibold text-slate-700">Your batches</h2><span className="rounded-full bg-slate-200/60 px-2 py-0.5 text-xs text-slate-600">{filteredBatches.length}</span></div>
+          <section className="space-y-4">
             {/* Search and Filter */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-3">
+            <div className="bg-white border border-gray-200 rounded-3xl p-4 shadow-sm space-y-3">
               <div className="flex items-center gap-3">
                 <Search size={18} className="text-gray-400" />
                 <input
@@ -942,7 +953,7 @@ export default function BatchesPage() {
             {loading ? (
               <div className="bg-white rounded-3xl border border-gray-200 p-10 text-center text-gray-500">Loading batches...</div>
             ) : filteredBatches.length > 0 ? (
-              <div ref={batchListRef} className="space-y-2 max-h-[65vh] overflow-y-auto pr-1">
+              <div className="space-y-3">
                 {filteredBatches.map((batch) => {
                   const studentCount = enrollments.filter(
                     (e) => (e.learningMode || "recorded") === "live" && (e.batchId === batch._id || (e.batchName === batch.name && !e.batchId))
@@ -951,20 +962,29 @@ export default function BatchesPage() {
                     <button
                       key={batch._id}
                       onClick={() => selectBatch(batch)}
-                      aria-current={selectedId === batch._id ? "true" : undefined}
-                      className={`w-full text-left rounded-xl border p-4 transition focus-visible:outline-2 focus-visible:outline-blue-600 ${
+                      className={`w-full text-left rounded-3xl border p-5 shadow-sm transition ${
                         selectedId === batch._id
-                          ? "bg-blue-50 border-blue-400 text-slate-900 ring-1 ring-blue-100"
-                          : "bg-white border-gray-200 text-gray-900 hover:border-blue-300 hover:bg-slate-50"
+                          ? "bg-gray-900 border-gray-900 text-white"
+                          : "bg-white border-gray-200 text-gray-900 hover:border-blue-300"
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <h3 className="min-w-0 break-words text-base font-semibold leading-6">{batch.name}</h3>
-                        <span className={"mt-1.5 h-2 w-2 shrink-0 rounded-full " + (batch.isActive ? "bg-emerald-500" : "bg-slate-300")} title={batch.isActive ? "Active" : "Hidden"} />
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h2 className="text-lg font-bold truncate">{batch.name}</h2>
+                          <p className={`text-sm mt-0.5 truncate ${selectedId === batch._id ? "text-gray-300" : "text-gray-500"}`}>
+                            {batch.courseName || "No course"}
+                          </p>
+                        </div>
+                        <span className="bg-blue-100 text-[#4d8bff] px-2 py-1 rounded-lg text-xs font-bold flex-none">
+                          {batch.code || "Draft"}
+                        </span>
                       </div>
-                      <p className="mt-1 text-sm text-slate-500">{batch.courseName || "No course"}</p>
-                      <p className="mt-2 break-all font-mono text-[11px] tracking-wide text-slate-500">{batch.code || "Draft"}</p>
-                      <div className="mt-3 flex items-center justify-between border-t border-slate-200/70 pt-3 text-xs text-slate-600"><span>{studentCount} {studentCount === 1 ? "student" : "students"}</span><span className={selectedId === batch._id ? "font-semibold text-blue-700" : "text-slate-500"}>{selectedId === batch._id ? "Selected" : batch.isActive ? "Active" : "Hidden"}</span></div>
+                      <div className="grid grid-cols-4 gap-2 mt-4 text-center">
+                        <MiniStat label="Students" value={studentCount} dark={selectedId === batch._id} />
+                        <MiniStat label="Tests" value={batch.tests.length} dark={selectedId === batch._id} />
+                        <MiniStat label="Tasks" value={batch.assignments.length} dark={selectedId === batch._id} />
+                        <MiniStat label="Materials" value={batch.materials.length} dark={selectedId === batch._id} />
+                      </div>
                     </button>
                   );
                 })}
@@ -984,73 +1004,52 @@ export default function BatchesPage() {
           </section>
 
           {/* Right Panel: Batch Detail */}
-          <section className="min-w-0 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+          <section className="bg-white rounded-[32px] border border-gray-200 shadow-sm overflow-hidden">
             {selectedBatch ? (
               <>
                 {/* Batch Header */}
-                <div className="bg-white text-slate-900 p-5 border-b border-slate-100">
+                <div className="bg-gray-950 text-white p-8">
                   <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-6">
                     <div className="flex-1 min-w-0">
                       <p className="text-[#4d8bff] text-xs font-black uppercase tracking-[0.3em]">
                         {form.courseName || "Batch Detail"}
                       </p>
-                      <h2 className="mt-2 text-2xl font-bold">{form.name}</h2>
-                      <p className="text-slate-500 mt-2 text-sm">
-                        {totalStudents} {totalStudents === 1 ? "student" : "students"} · {form.isActive ? "Visible to students" : "Hidden from students"}
+                      <input
+                        value={form.name}
+                        onChange={(e) => setForm({ ...form, name: e.target.value })}
+                        className="mt-3 w-full bg-transparent text-3xl font-black outline-none border-b border-white/10 pb-2"
+                        placeholder="Batch name"
+                      />
+                      <p className="text-gray-400 mt-3 text-sm">
+                        {totalStudents} student(s) · {form.materials.length} material(s) · {form.tests.length} test(s)
                       </p>
                     </div>
-                    <div className="flex flex-wrap items-center gap-3">
-                      {JSON.stringify(form) !== JSON.stringify(selectedBatch) && <span className="text-xs font-medium text-amber-700">Unsaved changes</span>}
+                    <div className="flex flex-wrap gap-3">
+                      {form._id && (
+                        <button
+                          onClick={deleteBatch}
+                          className="bg-red-500/15 text-red-200 border border-red-400/20 px-5 py-3 rounded-2xl font-bold flex items-center gap-2"
+                        >
+                          <Trash2 size={16} />
+                          Delete
+                        </button>
+                      )}
                       <button
                         onClick={saveBatch}
-                        disabled={saving || JSON.stringify(form) === JSON.stringify(selectedBatch)}
-                        className="text-white bg-gradient-to-r from-[#2563eb] to-[#1a4fd6] hover:bg-blue-400 disabled:from-slate-200 disabled:to-slate-200 disabled:text-slate-500 disabled:cursor-not-allowed px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2"
+                        disabled={saving}
+                        className="bg-gradient-to-r from-[#2563eb] to-[#1a4fd6] hover:bg-blue-400 disabled:bg-[#0a2f52] px-6 py-3 rounded-2xl font-black flex items-center gap-2"
                       >
                         <Save size={16} />
-                        {saving ? "Saving..." : "Save changes"}
+                        {saving ? "Saving..." : "Save Batch"}
                       </button>
                     </div>
                   </div>
                 </div>
 
-                {/* Tabs */}
-                <div className="border-b border-gray-100 px-6">
-                  <div className="flex flex-wrap gap-x-1">
-                    {[
-                      { key: "content", label: "Content", count: null, icon: <Package size={15} /> },
-                      { key: "students", label: "Students", count: totalStudents, icon: <Users size={15} /> },
-                      { key: "tests", label: "Tests", count: form.tests.length, icon: <GraduationCap size={15} /> },
-                      { key: "assignments", label: "Assignments", count: form.assignments.length, icon: <FileText size={15} /> },
-                      { key: "notices", label: "Notices", count: form.notices.length, icon: <Megaphone size={15} /> },
-                      { key: "settings", label: "Settings", count: null, icon: <Settings size={15} /> },
-                      { key: "faculty", label: "Faculty", count: form.faculty.length, icon: <UserCog size={15} /> },
-                    ].map((tab) => (
-                      <button
-                        key={tab.key}
-                        onClick={() => setActiveTab(tab.key as any)}
-                        className={`flex items-center gap-2 px-3 py-3 text-sm font-semibold border-b-2 transition whitespace-nowrap ${
-                          activeTab === tab.key
-                            ? "border-blue-500 text-[#4d8bff]"
-                            : "border-transparent text-gray-500 hover:text-gray-700"
-                        }`}
-                      >
-                        {tab.icon}
-                        {tab.label}
-                        {tab.count !== null && <span className={`rounded-full px-1.5 py-0.5 text-xs ${activeTab === tab.key ? "bg-blue-100 text-[#4d8bff]" : "bg-gray-100 text-gray-500"}`}>
-                          {tab.count}
-                        </span>}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Tab Content */}
-                <div className="p-4 lg:p-6">
-{activeTab === "settings" && (
-                <div className="space-y-6"><div><h3 className="text-xl font-bold">Batch settings</h3><p className="mt-1 text-sm text-slate-500">Manage general details and student access.</p></div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Field label="Batch name"><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="field" /></Field>
-<Field label="Batch Code">
+                {/* Basic Info */}
+                <div className="p-6 border-b border-gray-100">
+                  <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
+                    <Field label="Batch Code">
                       <input
                         value={form.code}
                         onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
@@ -1098,7 +1097,7 @@ export default function BatchesPage() {
                         className="field"
                       />
                     </Field>
-                    <div className="md:col-span-2">
+                    <div className="xl:col-span-3">
                       <Field label="Description">
                         <input
                           value={form.description}
@@ -1109,9 +1108,40 @@ export default function BatchesPage() {
                       </Field>
                     </div>
                   </div>
-<div className="rounded-xl border border-red-200 p-5"><h3 className="font-semibold text-red-700">Delete batch</h3><p className="mt-1 mb-4 text-sm text-slate-600">Permanently remove this batch. Review carefully before continuing.</p><button onClick={deleteBatch} className="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700">Delete batch</button></div></div>
+                </div>
 
-)}
+                {/* Tabs */}
+                <div className="border-b border-gray-100 px-6">
+                  <div className="flex gap-1 overflow-x-auto">
+                    {[
+                      { key: "content", label: "Content", count: inventoryCount, icon: <Package size={15} /> },
+                      { key: "students", label: "Students", count: totalStudents, icon: <Users size={15} /> },
+                      { key: "tests", label: "Tests", count: form.tests.length, icon: <GraduationCap size={15} /> },
+                      { key: "assignments", label: "Assignments", count: form.assignments.length, icon: <FileText size={15} /> },
+                      { key: "notices", label: "Notices", count: form.notices.length, icon: <Megaphone size={15} /> },
+                      { key: "faculty", label: "Faculty", count: form.faculty.length, icon: <UserCog size={15} /> },
+                    ].map((tab) => (
+                      <button
+                        key={tab.key}
+                        onClick={() => setActiveTab(tab.key as any)}
+                        className={`flex items-center gap-2 px-4 py-4 text-sm font-semibold border-b-2 transition whitespace-nowrap ${
+                          activeTab === tab.key
+                            ? "border-blue-500 text-[#4d8bff]"
+                            : "border-transparent text-gray-500 hover:text-gray-700"
+                        }`}
+                      >
+                        {tab.icon}
+                        {tab.label}
+                        <span className={`rounded-full px-1.5 py-0.5 text-xs ${activeTab === tab.key ? "bg-blue-100 text-[#4d8bff]" : "bg-gray-100 text-gray-500"}`}>
+                          {tab.count}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Tab Content */}
+                <div className="p-6">
                   {activeTab === "content" && (
                     <div className="space-y-6">
                       {!form._id || !form.courseId ? (
@@ -1201,8 +1231,91 @@ export default function BatchesPage() {
                         </div>
                       ) : null}
 
-                      {form._id && form.courseId && <S3UploadPanel key={form._id + form.courseId} courseId={form.courseId} batchId={form._id} library />}
-                      {inventory.length > 0 && <details className="rounded-xl border p-4 text-sm"><summary>Existing SharePoint files ({inventory.length})</summary>{inventory.map(item => <p key={item._id} className="py-2">{item.fileName}</p>)}</details>}
+                      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+                        {contentCategories.map((category) => {
+                          const Icon = category.icon;
+                          const items = inventoryByCategory[category.key] || [];
+                          const isUploading = uploadingCategory === category.key;
+                          const targetPath = [form.courseName, form.name, category.folder].filter(Boolean).join(" / ");
+
+                          return (
+                            <section key={category.key} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                                <div className="flex gap-3">
+                                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                                    <Icon size={20} />
+                                  </div>
+                                  <div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <h2 className="text-lg font-bold text-gray-900">{category.label}</h2>
+                                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${items.length ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>
+                                        {items.length ? "Uploaded" : "Empty"}
+                                      </span>
+                                    </div>
+                                    <p className="mt-1 text-sm text-gray-500">Total Uploaded: {items.length}</p>
+                                  </div>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => openSharePointPicker(category.key)}
+                                    disabled={!form._id || !form.courseId || inventoryLoading}
+                                    className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 disabled:opacity-50"
+                                  >
+                                    <FolderOpen size={14} />
+                                    Add from SharePoint
+                                  </button>
+                                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                                    {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                                    Upload
+                                    <input
+                                      type="file"
+                                      accept={category.accept}
+                                      className="hidden"
+                                      disabled={!form._id || !form.courseId || isUploading || inventoryLoading}
+                                      onChange={(event) => handleInventoryFileChange(event, category.key)}
+                                    />
+                                  </label>
+                                </div>
+                              </div>
+
+                              <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                                <span className="font-semibold text-gray-900">Target Path:</span> {targetPath || "Link a course and save this batch"}
+                              </div>
+
+                              <div className="mt-4 overflow-hidden rounded-xl border border-gray-200">
+                                <div className="grid grid-cols-[1fr_140px] bg-gray-100 px-3 py-2 text-xs font-bold uppercase tracking-wide text-gray-600">
+                                  <span>Existing Files</span>
+                                  <span>Upload Date</span>
+                                </div>
+                                {inventoryLoading ? (
+                                  <div className="flex items-center justify-center px-3 py-8 text-sm text-gray-500">
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Loading files...
+                                  </div>
+                                ) : items.length ? (
+                                  items.map((item) => (
+                                    <div key={item._id} className="grid grid-cols-[1fr_140px] gap-3 border-t border-gray-200 px-3 py-3 text-sm">
+                                      <div className="min-w-0">
+                                        <p className="truncate font-semibold text-gray-900">{item.fileName}</p>
+                                        <p className="mt-1 truncate text-xs text-gray-500">
+                                          {item.sharePointItemId || "SharePoint item id not available"}
+                                        </p>
+                                      </div>
+                                      <div className="flex items-center gap-1 text-gray-600">
+                                        <CheckCircle2 size={16} className="text-emerald-500" />
+                                        {formatInventoryDate(item.uploadedAt || item.createdAt)}
+                                      </div>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div className="px-3 py-8 text-center text-sm text-gray-500">No files uploaded yet.</div>
+                                )}
+                              </div>
+                            </section>
+                          );
+                        })}
+                      </div>
 
                       <LegacyBatchContentReadOnly materials={legacyMaterials} />
                     </div>
@@ -2460,9 +2573,9 @@ function SidebarLink({ href, icon, text, active = false, badge = null }: any) {
 
 function StatCard({ title, value }: { title: string; value: number }) {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 px-5 py-4">
-      <p className="text-xs font-medium text-slate-500">{title}</p>
-      <p className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">{value}</p>
+    <div className="bg-white rounded-3xl border border-gray-200 p-6 shadow-sm">
+      <p className="text-xs uppercase tracking-widest text-gray-400">{title}</p>
+      <p className="text-4xl font-bold text-gray-900 mt-3">{value}</p>
     </div>
   );
 }
@@ -2479,7 +2592,7 @@ function MiniStat({ label, value, dark }: { label: string; value: number; dark?:
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-sm font-medium text-slate-600">{label}</span>
+      <span className="text-xs font-bold uppercase tracking-widest text-gray-400">{label}</span>
       <div className="mt-1.5">{children}</div>
     </label>
   );

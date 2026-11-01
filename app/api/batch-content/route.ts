@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { verifyTenantSession } from "@/lib/auth/tenantSession";
 import { connectDB } from "@/lib/mongodb";
 import { fetchSharePointFile } from "@/lib/sharepoint";
+import { directSharePointVideoEnabled, redirectToSharePointVideo } from "@/lib/video/sharePointDelivery";
 import {
   contentTypeFromName,
   extractSharePointParam,
@@ -243,6 +244,15 @@ export const GET = withTenantContext(async (req: Request) => {
           { status: 403 }
         );
       }
+    }
+
+    if (
+      driveId && itemId && directSharePointVideoEnabled() &&
+      (material.type === "video" || viewableKindFromName(filename) === "video")
+    ) {
+      const response = await redirectToSharePointVideo(driveId, itemId);
+      await logAccess({ user, batch, material, action: "play", req });
+      return response;
     }
 
     const fileRes = await fetchMaterialBytes(material, req.headers.get("range"));

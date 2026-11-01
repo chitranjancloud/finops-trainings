@@ -1,12 +1,7 @@
 "use client";
-import { notify } from "@/components/Feedback";
-import S3BatchContent from "@/components/S3BatchContent";
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import BatchClassroomView, { type ClassroomTab } from "@/components/BatchClassroomView";
-import BatchLibraryCard from "@/components/BatchLibraryCard";
 import AnswerSheetModal from "@/components/AnswerSheetModal";
 import ProtectedContentShell from "@/components/ProtectedContentShell";
 import ProtectedVideoPlayer from "@/components/ProtectedVideoPlayer";
@@ -19,8 +14,6 @@ import {
 import { trackEvent } from "@/lib/trackEvent";
 import {
   ArrowLeft,
-  ChevronDown,
-  Search,
   Award,
   BookOpen,
   CalendarDays,
@@ -44,37 +37,52 @@ import {
 } from "lucide-react";
 
 export default function StudentBatchesPage() {
-  return <Suspense fallback={<BatchPageLoading />}><StudentBatchesWorkspace /></Suspense>;
-}
-
-function BatchPageLoading() {
-  return <main className="min-h-screen bg-slate-50 px-5 py-8 sm:px-8"><div role="status" aria-label="Loading your learning library" className="mx-auto max-w-6xl animate-pulse space-y-5"><div className="h-8 w-48 rounded-lg bg-slate-200" /><div className="h-4 w-80 max-w-full rounded bg-slate-200" /><div className="grid gap-5 pt-6 md:grid-cols-2"><div className="h-64 rounded-2xl bg-slate-200" /><div className="h-64 rounded-2xl bg-slate-200" /></div><span className="sr-only">Loading your learning library</span></div></main>;
-}
-
-function StudentBatchesWorkspace() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const requestedBatch = searchParams.get("batch") || "";
-  const requestedRecording = requestedBatch ? "" : searchParams.get("recorded") || "";
-  const requestedTab = searchParams.get("tab");
-  const activeTab: ClassroomTab = ["materials", "tests", "assignments", "notices", "faculty"].includes(requestedTab || "") ? requestedTab as ClassroomTab : "materials";
-  const [search, setSearch] = useState("");
-  const loadedOnce = useRef(false);
   const [batches, setBatches] = useState<any[]>([]);
   const [enrollments, setEnrollments] = useState<any[]>([]);
   const [recordedCourses, setRecordedCourses] = useState<any[]>([]);
   const [pendingLiveEnrollments, setPendingLiveEnrollments] = useState<any[]>([]);
   const [submissions, setSubmissions] = useState<any[]>([]);
+  const [selectedId, setSelectedId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [activeTab, setActiveTab] = useState<"materials" | "tests" | "assignments" | "notices" | "faculty">("materials");
   // batchId → { completedCount, totalCount, pct }
   const [batchProgress, setBatchProgress] = useState<Record<string, { completedCount: number; totalCount: number; pct: number }>>({});
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
+      const blocked =
+        (event.ctrlKey && ["s", "p", "u"].includes(key)) ||
+        (event.ctrlKey && event.shiftKey && ["i", "j", "c"].includes(key)) ||
+        key === "f12";
+
+      if (blocked) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+
+    const onContextMenu = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (["VIDEO", "IFRAME"].includes(target.tagName)) {
+        event.preventDefault();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown, { capture: true });
+    document.addEventListener("contextmenu", onContextMenu, { capture: true });
+
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, { capture: true });
+      document.removeEventListener("contextmenu", onContextMenu, { capture: true });
+    };
+  }, []);
 
   const auth = () => {
     const storedUser = localStorage.getItem("user");
     return {
-      user: (() => { try { return storedUser ? JSON.parse(storedUser) : null; } catch { return null; } })(),
+      user: storedUser ? JSON.parse(storedUser) : null,
       sessionToken: localStorage.getItem("sessionToken") || "",
       deviceId: localStorage.getItem("deviceId") || "",
     };
@@ -99,11 +107,11 @@ function StudentBatchesWorkspace() {
     const { user, sessionToken, deviceId } = auth();
     if (!user || !sessionToken || !deviceId) { window.location.href = "/login"; return; }
 
-    void markNotificationsRead(user._id, ["batch", "test", "assignment"]);
+    await markNotificationsRead(user._id, ["batch", "test", "assignment"]);
 
     const params = new URLSearchParams({ scope: "student", userId: user._id, sessionToken, deviceId });
     try {
-      setLoading(!loadedOnce.current); setError("");
+      setLoading(true);
       const [batchRes, submissionRes] = await Promise.all([
         fetch(`/api/batches?${params.toString()}`, { cache: "no-store" }),
         fetch(`/api/batch-submissions?${params.toString()}`, { cache: "no-store" }),
@@ -116,9 +124,8 @@ function StudentBatchesWorkspace() {
       setRecordedCourses(batchData.recordedCourses || []);
       setPendingLiveEnrollments(batchData.pendingLiveEnrollments || []);
       setSubmissions(submissionData.submissions || []);
-      loadedOnce.current = true;
+      setSelectedId(batchData.batches?.[0]?._id || "");
 
-      setLoading(false);
       // Load lesson progress for all batches to populate sidebar progress bars
       const loadedBatches: any[] = batchData.batches || [];
       if (loadedBatches.length > 0 && user && sessionToken && deviceId) {
@@ -153,38 +160,160 @@ function StudentBatchesWorkspace() {
 
   useEffect(() => { loadAll(); }, []);
 
-  const selected = useMemo(() => batches.find(batch => String(batch._id) === requestedBatch), [batches, requestedBatch]);
-  const selectedRecording = recordedCourses.find(item => recordedCourseKey(item) === requestedRecording);
-  const selectedEnrollment = selected && enrollments.find(item => String(item.batchId) === String(selected._id) || item.batchName === selected.name);
-  const filteredBatches = batches.filter(batch => [batch.name, batch.courseName, batch.code].join(" ").toLowerCase().includes(search.trim().toLowerCase()));
-  const filteredRecordings = recordedCourses.filter(item => [item.course?.title, item.enrollment?.courseName].join(" ").toLowerCase().includes(search.trim().toLowerCase()));
-  const detailRequested = Boolean(requestedBatch || requestedRecording);
+  const selected = useMemo(
+    () => batches.find((batch) => batch._id === selectedId) || batches[0],
+    [batches, selectedId]
+  );
 
-  function changeTab(tab: ClassroomTab) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (tab === "materials") params.delete("tab"); else params.set("tab", tab);
-    router.replace(`/student/batches?${params}`, { scroll: false });
-  }
+  const selectedEnrollment = useMemo(() => {
+    if (!selected) return null;
+    return enrollments.find(
+      (item) => item.batchId === selected._id || item.batchName === selected.name
+    );
+  }, [enrollments, selected]);
 
-  if (loading) return <BatchPageLoading />;
-  if (error) return <main className="min-h-screen bg-slate-50 px-6 py-10 text-slate-900"><div role="alert" className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-8"><h1 className="text-2xl font-semibold">We couldn’t load your classroom</h1><p className="mt-3 text-sm text-slate-600">{error}</p><button onClick={loadAll} className="mt-5 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white">Try again</button></div></main>;
-  if (detailRequested && !selected && !selectedRecording) return <main className="min-h-screen bg-slate-50 px-6 py-10 text-slate-900"><div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-8"><BookOpen size={28} className="text-blue-600" /><h1 className="mt-4 text-2xl font-semibold">This classroom isn’t available</h1><p className="mt-3 text-sm leading-7 text-slate-600">This link may be out of date, or the classroom may no longer be assigned to your account. Choose from your available batches.</p><Link href="/student/batches" className="mt-5 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white"><ArrowLeft size={16} />All my batches</Link></div></main>;
+  return (
+    <main className="dash-page px-6 pt-24 pb-16">
+      <div className="relative max-w-7xl mx-auto">
+        <Link href="/" className="inline-flex items-center gap-2 text-slate-400 hover:text-white mb-8 text-sm transition-colors">
+          <ArrowLeft size={16} /> Back to Home
+        </Link>
 
-  if (selectedRecording) return <main className="dash-page min-h-screen px-4 pb-16 pt-4 sm:px-8"><BatchClassroomView recorded title={selectedRecording.course?.title || selectedRecording.enrollment?.courseName || "Recorded course"} description={selectedRecording.course?.description}><RecordedCoursesSection items={[selectedRecording]} auth={auth} compact /></BatchClassroomView></main>;
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-10">
+          <div>
+            <p className="eyebrow" style={{ color: "var(--brand-400)" }}>Batch Content</p>
+            <h1 className="mt-3 text-4xl md:text-5xl font-black tracking-tight text-white">My Batches</h1>
+            <p className="mt-3 text-slate-400 max-w-2xl text-sm leading-relaxed">
+              Access videos, PDFs, tests, assignments, notices, and faculty shared in your assigned batches.
+            </p>
+          </div>
+          <Link href="/student/chats" className="inline-flex items-center gap-2 rounded-xl bg-white/[0.06] border border-white/[0.08] px-5 py-2.5 text-sm font-semibold text-slate-300 hover:bg-white/[0.10] hover:text-white transition-all">
+            <Users size={16} /> Batch Chat
+          </Link>
+        </div>
 
-  if (selected) return (
-    <main className="dash-page min-h-screen px-4 pb-16 pt-4 sm:px-8">
-      <BatchClassroomView
-        title={selected.name}
-        courseName={selected.courseName || selectedEnrollment?.courseName}
-        code={selected.code}
-        startDate={selected.startDate}
-        description={selected.description}
-        activeTab={activeTab}
-        onTabChange={changeTab}
-        counts={{ tests: active(selected.tests).length, assignments: active(selected.assignments).length, notices: active(selected.notices).length, faculty: (selected.faculty || []).length }}
-      >
-        {activeTab === "materials" && <BatchLearningContent key={selected._id} batch={selected} auth={auth} onProgressUpdate={(batchId, completedCount, totalCount, pct) => setBatchProgress(prev => ({ ...prev, [batchId]: { completedCount, totalCount, pct } }))} />}
+        {loading ? (
+          <Empty text="Loading batch content..." />
+        ) : error ? (
+          <Empty text={error} danger />
+        ) : batches.length === 0 && recordedCourses.length === 0 && pendingLiveEnrollments.length === 0 ? (
+          <Empty text="No enrolled content is available yet." />
+        ) : (
+          <div className="space-y-8">
+            {recordedCourses.length > 0 && <RecordedCoursesSection items={recordedCourses} auth={auth} />}
+            {pendingLiveEnrollments.length > 0 && <PendingLiveSection items={pendingLiveEnrollments} />}
+            {batches.length > 0 && (
+          <div className="grid grid-cols-1 xl:grid-cols-[340px_1fr] gap-6">
+            {/* Batch selector sidebar */}
+            <aside className="space-y-3">
+              {batches.map((batch) => {
+                const prog = batchProgress[String(batch._id)];
+                return (
+                <button
+                  key={batch._id}
+                  onClick={() => { setSelectedId(batch._id); setActiveTab("materials"); }}
+                  className={`w-full text-left rounded-2xl border p-5 transition-all duration-200 ${
+                    selected?._id === batch._id
+                      ? "bg-gradient-to-r from-[#2563eb] to-[#1a4fd6] border-blue-400/60 text-white shadow-lg shadow-blue-900/20"
+                      : "bg-white/[0.04] border-white/[0.08] hover:border-white/20 hover:bg-white/[0.07] text-slate-300"
+                  }`}
+                >
+                  <p className="text-xs uppercase tracking-widest opacity-75">{batch.code}</p>
+                  <h2 className="text-xl font-bold mt-2">{batch.name}</h2>
+                  <p className="text-sm opacity-75 mt-1">{batch.courseName}</p>
+                  <div className="grid grid-cols-4 gap-2 mt-4 text-center">
+                    <Mini label="Videos" value={active(batch.materials?.filter((m: any) => m.type === "video")).length} />
+                    <Mini label="Tests" value={active(batch.tests).length} />
+                    <Mini label="Tasks" value={active(batch.assignments).length} />
+                    <Mini label="Docs" value={active(batch.materials?.filter((m: any) => m.type !== "video")).length} />
+                  </div>
+                  {/* Real-time per-batch completion */}
+                  {prog && prog.totalCount > 0 && (
+                    <div className="mt-4">
+                      <div className="flex items-center justify-between text-xs mb-1.5">
+                        <span className="opacity-75">Completion</span>
+                        <span className="font-black">{prog.pct}%</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-black/25 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            selected?._id === batch._id
+                              ? "bg-white/70"
+                              : prog.pct === 100
+                                ? "bg-emerald-400"
+                                : "bg-blue-400"
+                          }`}
+                          style={{ width: `${prog.pct}%` }}
+                        />
+                      </div>
+                      <p className="text-[10px] opacity-60 mt-1">{prog.completedCount} of {prog.totalCount} items done</p>
+                    </div>
+                  )}
+                </button>
+                );
+              })}
+            </aside>
+
+            {/* Batch detail */}
+            {selected && (
+              <section className="rounded-2xl border border-white/[0.08] bg-white/[0.04] overflow-hidden">
+                {/* Header */}
+                <div className="bg-gradient-to-br from-[#2563eb]/15 via-[#7c3aed]/08 to-transparent p-8 border-b border-white/[0.06]">
+                  <p className="eyebrow mb-3" style={{ color: "var(--brand-400)" }}>{selected.code}</p>
+                  <h2 className="text-3xl font-black leading-tight text-white">{selected.name}</h2>
+                  <div className="mt-4 flex flex-wrap gap-2.5 text-sm text-slate-400">
+                    <span className="inline-flex items-center gap-2 rounded-full bg-white/[0.07] border border-white/[0.08] px-4 py-2">
+                      <BookOpen size={16} /> {selected.courseName || selectedEnrollment?.courseName || "Course"}
+                    </span>
+                    <span className="inline-flex items-center gap-2 rounded-full bg-white/[0.07] border border-white/[0.08] px-4 py-2">
+                      <CalendarDays size={16} /> {formatDate(selected.startDate)}
+                    </span>
+                  </div>
+                  {selected.description && <p className="mt-4 text-slate-400">{selected.description}</p>}
+                </div>
+
+                {/* Tabs */}
+                <div className="border-b border-white/[0.06] px-6">
+                  <div className="flex gap-0 overflow-x-auto scrollbar-hide">
+                    {[
+                      { key: "materials", label: "Materials", count: active(selected.materials || []).length, icon: <Package size={14} /> },
+                      { key: "tests", label: "Tests", count: active(selected.tests).length, icon: <GraduationCap size={14} /> },
+                      { key: "assignments", label: "Assignments", count: active(selected.assignments).length, icon: <FileText size={14} /> },
+                      { key: "notices", label: "Notices", count: active(selected.notices).length, icon: <Megaphone size={14} /> },
+                      { key: "faculty", label: "Faculty", count: (selected.faculty || []).length, icon: <UserCog size={14} /> },
+                    ].map((tab) => (
+                      <button
+                        key={tab.key}
+                        onClick={() => setActiveTab(tab.key as any)}
+                        className={`flex items-center gap-2 px-4 py-4 text-sm font-semibold border-b-2 transition whitespace-nowrap ${
+                          activeTab === tab.key
+                            ? "border-blue-400 text-blue-400"
+                            : "border-transparent text-slate-500 hover:text-slate-300"
+                        }`}
+                      >
+                        {tab.icon}
+                        {tab.label}
+                        <span className={`rounded-full px-1.5 py-0.5 text-xs ${activeTab === tab.key ? "bg-blue-500/20 text-blue-400" : "bg-white/[0.07] text-slate-500"}`}>
+                          {tab.count}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Tab Content */}
+                <div className="p-8">
+                  {activeTab === "materials" && (
+                    <MaterialsSection
+                      materials={active(selected.materials || [])}
+                      batchId={selected._id}
+                      auth={auth}
+                      onProgressUpdate={(batchId, completedCount, totalCount, pct) => {
+                        setBatchProgress((prev) => ({ ...prev, [batchId]: { completedCount, totalCount, pct } }));
+                      }}
+                    />
+                  )}
+
                   {activeTab === "tests" && (
                     <AssessmentList
                       type="test"
@@ -242,45 +371,22 @@ function StudentBatchesWorkspace() {
                       )}
                     </div>
                   )}
-      </BatchClassroomView>
-    </main>
-  );
-
-  return (
-    <main className="min-h-screen bg-slate-50 px-4 pb-16 pt-8 text-slate-900 sm:px-8">
-      <div className="mx-auto max-w-6xl">
-        <Link href="/student" className="mb-7 inline-flex min-h-10 items-center gap-2 text-sm font-medium text-slate-500 hover:text-blue-700"><ArrowLeft size={16} />Back to Dashboard</Link>
-        <div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="text-sm font-semibold text-blue-700">Your learning space</p><h1 className="mt-3 text-3xl font-semibold tracking-tight">My Batches</h1><p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600">Choose a classroom to find its lessons, assignments, and trainer updates.</p></div><Link href="/student/chats" className="inline-flex w-fit shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700"><Users size={16} />Messages & support</Link></div>
-        {batches.length > 0 || recordedCourses.length > 0 ? <>
-          <label className="relative mb-8 block max-w-xl"><span className="sr-only">Search your batches and courses</span><Search size={18} className="absolute left-4 top-3.5 text-slate-400" /><input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search your batches or courses" className="min-h-12 w-full rounded-xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm outline-none focus:border-blue-400" /></label>
-          {filteredBatches.length > 0 && <section aria-labelledby="live-batches-title" className="mb-10"><div className="mb-4 flex items-center gap-3"><h2 id="live-batches-title" className="text-lg font-semibold">Live classrooms</h2><span className="rounded-md bg-slate-200/70 px-2 py-0.5 text-xs font-medium text-slate-600">{filteredBatches.length}</span></div><div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{filteredBatches.map(batch => <BatchLibraryCard key={batch._id} href={`/student/batches?batch=${encodeURIComponent(batch._id)}`} title={batch.name} courseName={batch.courseName} code={batch.code} startDate={batch.startDate} progress={batchProgress[String(batch._id)]} assignments={active(batch.assignments).length} tests={active(batch.tests).length} />)}</div></section>}
-          {filteredRecordings.length > 0 && <section aria-labelledby="recorded-courses-title" className="mb-10"><div className="mb-4 flex items-center gap-3"><h2 id="recorded-courses-title" className="text-lg font-semibold">Self-paced courses</h2><span className="rounded-md bg-slate-200/70 px-2 py-0.5 text-xs font-medium text-slate-600">{filteredRecordings.length}</span></div><div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{filteredRecordings.map(item => <BatchLibraryCard key={recordedCourseKey(item)} recorded href={`/student/batches?recorded=${encodeURIComponent(recordedCourseKey(item))}`} title={item.course?.title || item.enrollment?.courseName || "Recorded course"} />)}</div></section>}
-          {filteredBatches.length === 0 && filteredRecordings.length === 0 && <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center"><Search size={26} className="mx-auto text-slate-400" /><h2 className="mt-4 text-lg font-semibold">No matching classrooms</h2><p className="mt-2 text-sm text-slate-500">Try a course name or a different batch code.</p><button onClick={() => setSearch("")} className="mt-5 text-sm font-semibold text-blue-700">Clear search</button></div>}
-        </> : <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center"><BookOpen size={30} className="mx-auto text-blue-600" /><h2 className="mt-4 text-xl font-semibold">Your learning starts here</h2><p className="mt-3 text-sm leading-7 text-slate-600">Your assigned classrooms and self-paced courses will appear here.</p><Link href="/#top-courses" className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-blue-700">Explore courses<ExternalLink size={16} /></Link></div>}
-        {pendingLiveEnrollments.length > 0 && <details className="mt-8 rounded-2xl border border-amber-200 bg-amber-50"><summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-medium text-amber-900"><span>{pendingLiveEnrollments.length} {pendingLiveEnrollments.length === 1 ? "enrollment is" : "enrollments are"} waiting for batch assignment</span><ChevronDown size={17} /></summary><div className="rounded-b-2xl bg-slate-900 p-4"><PendingLiveSection items={pendingLiveEnrollments} /></div></details>}
+                </div>
+              </section>
+            )}
+          </div>
+            )}
+          </div>
+        )}
       </div>
     </main>
   );
 }
 
-function recordedCourseKey(item: any) {
-  return String(item.enrollment?._id || item.course?.slug || item.course?._id || item.enrollment?.courseId || "");
-}
-
-function BatchLearningContent({ batch, auth, onProgressUpdate }: { batch: any; auth: () => any; onProgressUpdate: (batchId: string, completedCount: number, totalCount: number, pct: number) => void }) {
-  const [libraryAvailable, setLibraryAvailable] = useState<boolean | null>(null);
-  const [showAdditional, setShowAdditional] = useState(false);
-  const materials = active(batch.materials || []);
-  return <div className="space-y-6"><div><h2 className="text-xl font-semibold text-white">Learning library</h2><p className="mt-2 text-sm leading-7 text-slate-400">Choose a recording or resource to start learning.</p></div>
-    <S3BatchContent compact batchId={batch._id} onAvailabilityChange={setLibraryAvailable} />
-    {libraryAvailable === false ? <MaterialsSection materials={materials} batchId={batch._id} auth={auth} onProgressUpdate={onProgressUpdate} /> : libraryAvailable === true && <div className="border-t border-white/[0.08] pt-5"><button type="button" aria-expanded={showAdditional} aria-controls="additional-study-resources" onClick={() => setShowAdditional(value => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/[0.08] bg-white/[0.025] px-4 py-4 text-left"><span><span className="block text-sm font-medium text-slate-200">Additional study resources{materials.length > 0 ? ` · ${materials.length}` : ""}</span><span className="mt-1 block text-xs leading-6 text-slate-400">Other notes, documents, and course links shared by your trainer.</span></span><ChevronDown size={18} className={`shrink-0 text-slate-400 transition-transform ${showAdditional ? "rotate-180" : ""}`} /></button>{showAdditional && <div id="additional-study-resources" className="pt-4"><MaterialsSection materials={materials} batchId={batch._id} auth={auth} onProgressUpdate={onProgressUpdate} /></div>}</div>}
-  </div>;
-}
-
-function RecordedCoursesSection({ items, auth, compact = false }: { items: any[]; auth: () => any; compact?: boolean }) {
+function RecordedCoursesSection({ items, auth }: { items: any[]; auth: () => any }) {
   return (
-    <section className={compact ? "space-y-4" : "rounded-2xl border border-emerald-300/15 bg-emerald-400/[0.04] p-6"}>
-      {!compact && <div className="flex items-center gap-3 mb-5">
+    <section className="rounded-2xl border border-emerald-300/15 bg-emerald-400/[0.04] p-6">
+      <div className="flex items-center gap-3 mb-5">
         <div className="h-10 w-10 rounded-xl bg-emerald-500/15 border border-emerald-400/20 text-emerald-300 flex items-center justify-center">
           <BookOpen size={20} />
         </div>
@@ -288,8 +394,8 @@ function RecordedCoursesSection({ items, auth, compact = false }: { items: any[]
           <p className="eyebrow mb-0" style={{ color: "#34d399" }}>Self-Paced Learning</p>
           <h2 className="text-2xl font-black text-white">Recorded Course Content</h2>
         </div>
-      </div>}
-      <div className={compact ? "space-y-4" : "grid grid-cols-1 lg:grid-cols-2 gap-5"}>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {items.map(({ course, enrollment }: any) => {
           const resources = [
             ...normalizeCourseItems(course?.videos, course?.videoUrl, "video", "Course Video").map(
@@ -309,9 +415,9 @@ function RecordedCoursesSection({ items, auth, compact = false }: { items: any[]
             courseId: course?.slug || course?._id || enrollment?.courseId || "",
           }));
           return (
-            <div key={enrollment?._id || course?._id} className={compact ? "space-y-3" : "rounded-2xl border border-white/[0.08] bg-white/[0.04] p-5"}>
-              {!compact && <><h3 className="text-xl font-bold">{course?.title || enrollment?.courseName || "Course"}</h3>
-              <p className="mt-1 text-sm text-emerald-100/80">Instant recorded access enabled</p></>}
+            <div key={enrollment?._id || course?._id} className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-5">
+              <h3 className="text-xl font-bold">{course?.title || enrollment?.courseName || "Course"}</h3>
+              <p className="mt-1 text-sm text-emerald-100/80">Instant recorded access enabled</p>
               <div className="mt-4 space-y-3">
                 {resources.length > 0 ? resources.map((item: any, index: number) => (
                   <RecordedResource key={`${item.type}-${index}`} item={item} auth={auth} />
@@ -603,13 +709,11 @@ function MaterialsSection({
   batchId,
   auth,
   onProgressUpdate,
-  hideEmpty = false,
 }: {
   materials: any[];
   batchId: string;
   auth: () => any;
   onProgressUpdate?: (batchId: string, completedCount: number, totalCount: number, pct: number) => void;
-  hideEmpty?: boolean;
 }) {
   const [openCat, setOpenCat] = useState<MatCategory | null>(null);
   const [search, setSearch] = useState("");
@@ -734,7 +838,6 @@ function MaterialsSection({
   }
 
   if (!structuredLoading && displayMaterials.length === 0) {
-    if (hideEmpty) return null;
     return (
       <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-white/15 py-16 px-6 text-center gap-3">
         <div className="text-4xl">📂</div>
@@ -744,19 +847,137 @@ function MaterialsSection({
     );
   }
 
-  const activeItems = openCat ? (catMap[openCat] || []) : displayMaterials;
+  const toggle = (cat: MatCategory) => {
+    setOpenCat((prev) => (prev === cat ? null : cat));
+    setSearch("");
+  };
+
+  const activeItems = openCat ? (catMap[openCat] || []) : [];
   const filteredItems = search.trim()
-    ? activeItems.filter(item => (item.name || "").toLowerCase().includes(search.trim().toLowerCase()))
+    ? activeItems.filter((m) => (m.name || "").toLowerCase().includes(search.toLowerCase()))
     : activeItems;
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Filter study resources">
-        <button type="button" aria-pressed={openCat === null} onClick={() => { setOpenCat(null); setSearch(""); }} className={`min-h-10 rounded-lg border px-3 py-2 text-xs font-medium ${openCat === null ? "border-blue-400/40 bg-blue-400/10 text-blue-200" : "border-white/10 text-slate-400 hover:text-white"}`}>All resources · {displayMaterials.length}</button>
-        {visibleCategories.map(cat => <button key={cat} type="button" aria-pressed={openCat === cat} onClick={() => { setOpenCat(cat); setSearch(""); }} className={`inline-flex min-h-10 items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${openCat === cat ? "border-blue-400/40 bg-blue-400/10 text-blue-200" : "border-white/10 text-slate-400 hover:text-white"}`}>{CAT_CONFIG[cat].label}<span className="text-slate-400">{catMap[cat].length}</span></button>)}
+    <div className="space-y-3">
+      {/* ── Category summary cards ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {visibleCategories.map((cat) => {
+          const cfg = CAT_CONFIG[cat];
+          const count = catMap[cat].length;
+          const isOpen = openCat === cat;
+          return (
+            <button
+              key={cat}
+              onClick={() => count > 0 && toggle(cat)}
+              disabled={count === 0}
+              className={`relative flex flex-col items-center gap-2 rounded-2xl border p-4 transition-all duration-200 text-center
+                ${count === 0 ? "opacity-30 cursor-not-allowed border-white/10 bg-white/[0.02]" :
+                  isOpen
+                    ? `${cfg.accent} bg-white/[0.07] shadow-lg scale-[1.02]`
+                    : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06]"
+                }`}
+            >
+              {/* Active indicator dot */}
+              {isOpen && (
+                <span className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-white/60" />
+              )}
+              <div className={`w-11 h-11 rounded-2xl border flex items-center justify-center ${cfg.iconBg} ${cfg.iconColor}`}>
+                <CategoryIcon type={cat} />
+              </div>
+              <div>
+                <p className={`text-2xl font-black leading-none ${isOpen ? "text-white" : "text-slate-200"}`}>{count}</p>
+                <p className="text-[11px] text-slate-400 mt-0.5 font-medium leading-tight">{cfg.label}</p>
+              </div>
+              {count > 0 && (
+                <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${cfg.badgeBg} ${cfg.badgeText}`}>
+                  {isOpen ? "Opened" : "Click to view"}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
-      <label className="relative block"><span className="sr-only">Search study resources</span><Search size={17} className="absolute left-3 top-3.5 text-slate-500" /><input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search study resources" className="min-h-11 w-full rounded-lg border border-white/10 bg-slate-950/30 py-3 pl-10 pr-4 text-sm text-white outline-none placeholder:text-slate-500 focus:border-blue-400" /></label>
-      {filteredItems.length > 0 ? <div className="grid gap-3 md:grid-cols-2">{filteredItems.map((item, index) => <MaterialCard key={item._id || index} item={item} catType={(visibleCategories.includes(item.type) ? item.type : "material") as MatCategory} batchId={batchId} auth={auth} isCompleted={completedIds.has(String(item._id))} onMarkComplete={markComplete} />)}</div> : <EmptyInline text={search ? `No resources match “${search}”.` : "No resources in this category yet."} />}
+
+      {/* ── Expanded category content ── */}
+      {openCat && (
+        <div className={`rounded-3xl border ${CAT_CONFIG[openCat].accent} bg-black/20 overflow-hidden`}>
+          {/* Header */}
+          <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-white/10">
+            <div className="flex items-center gap-3">
+              <div className={`w-9 h-9 rounded-xl border flex items-center justify-center ${CAT_CONFIG[openCat].iconBg} ${CAT_CONFIG[openCat].iconColor}`}>
+                <CategoryIcon type={openCat} />
+              </div>
+              <div>
+                <h3 className="font-black text-white text-base">{CAT_CONFIG[openCat].plural}</h3>
+                <p className="text-xs text-slate-400">{filteredItems.length} of {activeItems.length} item{activeItems.length !== 1 ? "s" : ""}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {/* Search */}
+              <div className="relative hidden sm:block">
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search..."
+                  className="w-40 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 outline-none focus:border-white/25 focus:w-52 transition-all duration-200"
+                />
+                {search && (
+                  <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                    <X size={11} />
+                  </button>
+                )}
+              </div>
+              {/* Close */}
+              <button
+                onClick={() => { setOpenCat(null); setSearch(""); }}
+                className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/15 flex items-center justify-center transition-colors"
+              >
+                <X size={14} className="text-slate-300" />
+              </button>
+            </div>
+          </div>
+
+          {/* Mobile search */}
+          <div className="px-5 pt-3 sm:hidden">
+            <div className="relative">
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={`Search ${CAT_CONFIG[openCat].label.toLowerCase()}...`}
+                className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs text-slate-200 placeholder-slate-500 outline-none focus:border-white/25"
+              />
+              {search && (
+                <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500">
+                  <X size={11} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Items */}
+          <div className="p-5">
+            {filteredItems.length === 0 ? (
+              <div className="py-10 text-center text-slate-400 text-sm">
+                {search ? `No results for "${search}"` : "No items in this category."}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {filteredItems.map((item: any, i: number) => (
+                  <MaterialCard
+                    key={item._id || i}
+                    item={item}
+                    catType={openCat}
+                    batchId={batchId}
+                    auth={auth}
+                    isCompleted={completedIds.has(String(item._id))}
+                    onMarkComplete={markComplete}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1117,7 +1338,7 @@ function AssessmentCard({ type, batch, item, submission, onSubmitted, auth }: an
     const res = await fetch("/api/upload", { method: "POST", body: formData });
     const data = await res.json();
     if (data.success) setFileUrl(data.url);
-    else notify(data.message || "Upload failed");
+    else alert(data.message || "Upload failed");
   };
 
   const submit = async (autoSubmitted = false) => {
@@ -1157,7 +1378,7 @@ function AssessmentCard({ type, batch, item, submission, onSubmitted, auth }: an
       });
       onSubmitted();
     } else {
-      notify(data.message || "Submission failed");
+      alert(data.message || "Submission failed");
     }
   };
 

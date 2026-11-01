@@ -10,11 +10,6 @@ node_modules/
 
 # Build and output
 .next/
-.next-s3-check/
-.next-ui-preview/
-artifacts/ui-refresh/
-artifacts/loading-performance/
-artifacts/classroom-redesign/
 /out
 /build
 dist/
@@ -41,6 +36,3 @@ lerna-debug.log*
 
 # OS
 Thumbs.db
-
-# Generated TypeScript cache
-*.tsbuildinfo

@@ -9,14 +9,25 @@ type SharePointConfig = {
   basePath: string;
 };
 
+function readSharePointSetting(key: string) {
+  let value = (process.env[key] || "").trim();
+  // Dashboard values may accidentally include .env-style wrapping quotes.
+  if ((value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))) {
+    value = value.slice(1, -1).trim();
+  }
+  // Preserve literal +, &, %, $, backslashes, etc. URLSearchParams encodes them.
+  return value;
+}
+
 export function getSharePointConfig(): SharePointConfig {
   return {
-    tenantId: process.env.SHAREPOINT_TENANT_ID || "",
-    clientId: process.env.SHAREPOINT_CLIENT_ID || "",
-    clientSecret: process.env.SHAREPOINT_CLIENT_SECRET || "",
-    driveId: process.env.SHAREPOINT_DRIVE_ID || "",
-    siteId: process.env.SHAREPOINT_SITE_ID || "",
-    basePath: process.env.SHAREPOINT_BASE_PATH || "",
+    tenantId: readSharePointSetting("SHAREPOINT_TENANT_ID"),
+    clientId: readSharePointSetting("SHAREPOINT_CLIENT_ID"),
+    clientSecret: readSharePointSetting("SHAREPOINT_CLIENT_SECRET"),
+    driveId: readSharePointSetting("SHAREPOINT_DRIVE_ID"),
+    siteId: readSharePointSetting("SHAREPOINT_SITE_ID"),
+    basePath: readSharePointSetting("SHAREPOINT_BASE_PATH"),
   };
 }
 
@@ -469,15 +480,14 @@ export async function getSharePointItemPreview(
 }
 
 /**
- * Returns a short-lived pre-authenticated download URL for a drive item.
- * Does NOT fetch file bytes — safe for direct browser delivery.
+ * Read trusted file metadata and its temporary download URL without file bytes.
  */
-export async function getSharePointItemDownloadUrl(
+export async function getSharePointItemPlaybackMetadata(
   driveId: string,
   itemId: string
-): Promise<string | null> {
+) {
   const res = await graphRequest(
-    `/drives/${encodeURIComponent(driveId)}/items/${encodeURIComponent(itemId)}?select=id,name,@microsoft.graph.downloadUrl`
+    `/drives/${encodeURIComponent(driveId)}/items/${encodeURIComponent(itemId)}?select=id,name,file,@microsoft.graph.downloadUrl`
   );
   const data = await res.json();
 
@@ -485,7 +495,18 @@ export async function getSharePointItemDownloadUrl(
     throw new Error(data.error?.message || "SharePoint item metadata failed");
   }
 
-  const downloadUrl = data["@microsoft.graph.downloadUrl"];
+  return {
+    name: typeof data.name === "string" ? data.name : "",
+    mimeType: typeof data.file?.mimeType === "string" ? data.file.mimeType : "",
+    downloadUrl: data["@microsoft.graph.downloadUrl"] as unknown,
+  };
+}
+
+export async function getSharePointItemDownloadUrl(
+  driveId: string,
+  itemId: string
+): Promise<string | null> {
+  const { downloadUrl } = await getSharePointItemPlaybackMetadata(driveId, itemId);
   if (typeof downloadUrl === "string" && downloadUrl.startsWith("http")) {
     return downloadUrl;
   }

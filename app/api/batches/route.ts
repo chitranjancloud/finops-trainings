@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import mongoose from "mongoose";
 
 import { connectDB } from "@/lib/mongodb";
 import { createNotification } from "@/lib/notifications";
@@ -132,7 +131,6 @@ export async function GET(req: Request) {
         return NextResponse.json({ success: false, message: "Session expired" }, { status: 401 });
       }
 
-      const dashboard = searchParams.get("view") === "dashboard";
       // Find enrollments by userId or email, with a batchId assigned
       const allEnrollments = await Enrollment.find({
         $or: [{ userId: String(user._id) }, { email: user.email }],
@@ -165,7 +163,7 @@ export async function GET(req: Request) {
         .map((item: any) => String(item.batchName || "").trim())
         .filter(Boolean);
 
-      const batchQuery = Batch.find({
+      const batches = await Batch.find({
         $or: [
           { _id: { $in: batchIds } },
           ...(batchNames.length > 0 ? [{ name: { $in: batchNames }, isActive: true }] : []),
@@ -173,28 +171,18 @@ export async function GET(req: Request) {
         isActive: true,
       }).sort({ startDate: -1, createdAt: -1 });
 
-      if (dashboard) {
-        const batches = await batchQuery.select("name tests._id tests.title tests.dueDate tests.scheduledAt tests.isActive assignments._id assignments.title assignments.dueDate assignments.scheduledAt assignments.isActive").lean();
-        return NextResponse.json({ success: true, batches });
-      }
-
-      const courseIds = recordedEnrollments.map(item => String(item.courseId || ""));
-      const courseNames = recordedEnrollments.map(item => String(item.courseName || ""));
-      const [batches, courseDocuments] = await Promise.all([
-        batchQuery,
-        recordedEnrollments.length ? Course.find({ $or: [
-          { slug: { $in: courseIds } },
-          { _id: { $in: courseIds.filter(id => mongoose.isValidObjectId(id)) } },
-          { title: { $in: courseNames } },
-        ] }).lean() : Promise.resolve([]),
-      ]);
-      const recordedCourses = recordedEnrollments.map(enrollment => ({
-        enrollment,
-        course: courseDocuments.find(course => course.slug === enrollment.courseId)
-          || courseDocuments.find(course => String(course._id) === String(enrollment.courseId))
-          || courseDocuments.find(course => course.title === enrollment.courseName)
-          || null,
-      }));
+      const recordedCourses = await Promise.all(
+        recordedEnrollments.map(async (enrollment: any) => {
+          const course =
+            (await Course.findOne({ slug: enrollment.courseId })) ||
+            (await Course.findById(enrollment.courseId).catch(() => null)) ||
+            (await Course.findOne({ title: enrollment.courseName }));
+          return {
+            enrollment,
+            course,
+          };
+        })
+      );
 
       return NextResponse.json({
         success: true,

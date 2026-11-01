@@ -55,15 +55,11 @@ export async function GET(req: Request) {
     const courseIds = enrollments.map((item: any) => String(item.courseId || "")).filter(Boolean);
     const courseNames = enrollments.map((item: any) => String(item.courseName || "")).filter(Boolean);
 
-    const dashboard = searchParams.get("view") === "dashboard";
-    const meetingQuery = TeamsMeeting.find({
-      ...(dashboard ? { startsAt: { $gte: new Date() } } : {}),
+    const meetings = await TeamsMeeting.find({
       isActive: true,
       $or: [{ courseId: { $in: courseIds } }, { courseName: { $in: courseNames } }],
     }).sort({ startsAt: 1, createdAt: -1 });
 
-    if (dashboard) meetingQuery.select("title startsAt courseName").limit(1);
-    const meetings = await meetingQuery.lean();
     return NextResponse.json({ success: true, meetings });
   } catch (error: any) {
     console.log("GET TEAMS MEETINGS ERROR:", error);

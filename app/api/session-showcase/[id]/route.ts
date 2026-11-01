@@ -26,7 +26,7 @@ export async function PUT(req: Request, { params }: any) {
         isFeatured: body.isFeatured === true,
         displayOrder: Number(body.displayOrder || 0),
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
     return NextResponse.json({ success: true, session });
   } catch (error: any) {

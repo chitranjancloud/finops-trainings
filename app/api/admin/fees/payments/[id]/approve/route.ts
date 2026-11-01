@@ -53,7 +53,7 @@ export const POST = withTenantContext(
             approvedAt,
           },
         },
-        { new: true }
+        { returnDocument: 'after' }
       );
 
       let paymentDoc = updated;

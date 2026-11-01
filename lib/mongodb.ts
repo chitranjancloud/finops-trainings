@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { setServers } from "node:dns";
 
 const MONGO_URI =
   process.env.MONGO_URI || process.env.MONGODB_URI;
@@ -7,23 +8,20 @@ if (!MONGO_URI) {
   console.warn("⚠️ MongoDB URI not found");
 }
 
-type ConnectionCache = {
-  conn: typeof mongoose | null;
-  promise: Promise<typeof mongoose> | null;
-};
+let cached = (global as any).mongoose;
 
-const connectionGlobal = globalThis as typeof globalThis & { mongoose?: ConnectionCache };
-const cached: ConnectionCache = connectionGlobal.mongoose ??= { conn: null, promise: null };
+if (!cached) {
+  cached = (global as any).mongoose = {
+    conn: null,
+    promise: null,
+  };
+}
 
 export async function connectDB() {
   // already connected
-  if (cached.conn?.connection.readyState === 1) {
+  if (cached.conn) {
+    console.log("✅ Using existing MongoDB connection");
     return cached.conn;
-  }
-
-  if (cached.conn?.connection.readyState === 0) {
-    cached.conn = null;
-    cached.promise = null;
   }
 
   // no URI
@@ -35,6 +33,14 @@ export async function connectDB() {
 
   // create connection
   if (!cached.promise) {
+    // Opt-in for networks whose default DNS resolver rejects Atlas SRV lookups.
+    // Leave unset to preserve the deployment's DNS configuration.
+    const dnsServers = process.env.MONGODB_DNS_SERVERS
+      ?.split(",")
+      .map((server) => server.trim())
+      .filter(Boolean);
+    if (dnsServers?.length) setServers(dnsServers);
+
     console.log("⏳ Connecting to MongoDB...");
 
     cached.promise = mongoose
@@ -50,11 +56,10 @@ export async function connectDB() {
 
   try {
     cached.conn = await cached.promise;
-    return cached.conn;
   } catch (error) {
-    // A temporary outage must not leave every later request awaiting a rejected promise.
-    cached.conn = null;
+    // A rejected promise must not poison every later login attempt.
     cached.promise = null;
     throw error;
   }
+  return cached.conn;
 }

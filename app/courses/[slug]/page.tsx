@@ -1,9 +1,8 @@
 "use client";
 
-import { notify } from "@/components/Feedback";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, useScroll, useTransform } from "framer-motion";
 import {
   BookOpen,
   CheckCircle2,
@@ -22,9 +21,7 @@ export default function CoursePage({
   const slug = resolvedParams.slug;
 
   const [dynamicCourse, setDynamicCourse] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [retry, setRetry] = useState(0);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showEnrollPopup, setShowEnrollPopup] = useState(false);
   const [showUnpublishedPopup, setShowUnpublishedPopup] = useState(false);
   const [batchAssigned, setBatchAssigned] = useState(false);
@@ -38,32 +35,41 @@ export default function CoursePage({
 
   const course = dynamicCourse;
 
+  const ref = useRef(null);
+  const { scrollYProgress } = useScroll({
+    target: ref,
+    offset: ["start start", "end end"],
+  });
+
+  const y = useTransform(scrollYProgress, [0, 1], ["0%", "20%"]);
 
   useEffect(() => {
-    let cancelled = false;
     const fetchDynamicCourse = async () => {
-      setLoading(true); setError(""); setDynamicCourse(null);
       try {
         const res = await fetch("/api/courses");
         const data = await res.json();
 
-        if (!res.ok || !data.success) throw new Error("Unable to load course details.");
         if (data.success) {
           const matchedCourse = data.courses?.find(
             (item: any) => item.slug === slug
           );
 
-          if (!cancelled) setDynamicCourse(matchedCourse || null);
+          if (matchedCourse) {
+            setDynamicCourse(matchedCourse);
+          }
         }
-      } catch {
-        if (!cancelled) setError("Unable to load this course. Please try again.");
-      } finally { if (!cancelled) setLoading(false); }
+      } catch (error) {
+        console.log(error);
+      }
     };
 
     fetchDynamicCourse();
-    return () => { cancelled = true; };
-  }, [slug, retry]);
+  }, [slug]);
 
+  useEffect(() => {
+    const storedUser = localStorage.getItem("user");
+    setIsLoggedIn(Boolean(storedUser));
+  }, []);
 
   useEffect(() => {
     const checkEnrollmentAccess = async () => {
@@ -114,7 +120,7 @@ export default function CoursePage({
     const storedUser = localStorage.getItem("user");
 
     if (!storedUser) {
-      notify("Please login first");
+      alert("Please login first");
       window.location.href = "/login";
       return;
     }
@@ -125,13 +131,13 @@ export default function CoursePage({
     const whatsapp = prompt("Enter your WhatsApp number for payment receipt");
 
     if (!sessionToken || !deviceId) {
-      notify("Please login again");
+      alert("Please login again");
       window.location.href = "/login";
       return;
     }
 
     if (!whatsapp || whatsapp.trim().length < 8) {
-      notify("WhatsApp number is required");
+      alert("WhatsApp number is required");
       return;
     }
 
@@ -156,7 +162,7 @@ export default function CoursePage({
     const paymentData = await paymentRes.json();
 
     if (!paymentData.success) {
-      notify(paymentData.message || "Payment could not start");
+      alert(paymentData.message || "Payment could not start");
 
       if (paymentRes.status === 401) {
         localStorage.removeItem("user");
@@ -198,7 +204,7 @@ export default function CoursePage({
             : "You are enrolled. Course content will be available after admin assigns you a batch."
         );
       } else {
-        notify(confirmData.message || "Payment verification failed");
+        alert(confirmData.message || "Payment verification failed");
       }
     };
 
@@ -244,14 +250,38 @@ export default function CoursePage({
   const selectedPrice =
     selectedLearningMode === "live" ? livePrice : recordedPrice;
 
-  if (loading || error || !course) {
-    return <section className="min-h-[60vh] bg-slate-50 px-6 py-20 text-slate-900"><div className="mx-auto max-w-3xl">
-      {loading ? <div role="status" aria-label="Loading course" className="animate-pulse space-y-5"><div className="h-10 w-3/4 rounded bg-slate-200" /><div className="h-28 rounded bg-slate-200" /><span className="sr-only">Loading course details</span></div> : <><h1 className="text-3xl font-bold">{error ? "We couldn’t load this course" : "Course not found"}</h1><p className="mt-4 text-slate-600">{error || "This course may have moved. Explore our available courses to find your next step."}</p>{error && <button onClick={() => setRetry(value => value + 1)} className="mt-6 rounded-xl bg-blue-600 px-5 py-3 text-white">Try again</button>}<Link href="/#top-courses" className="ml-4 mt-6 inline-block text-blue-700">Explore courses</Link></>}
-    </div></section>;
+  if (!course) {
+    return (
+      <div className="min-h-screen bg-[#0f172a] p-10 text-white">
+        Course Not Found
+      </div>
+    );
+  }
+
+  if (typeof window !== "undefined" && !isLoggedIn) {
+    return (
+      <section className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#0f172a] px-6 text-slate-100">
+        <div className="text-center">
+          <h1 className="mb-4 text-3xl font-bold">Please Login to View Course</h1>
+          <p className="mb-8 text-slate-400">
+            You need to login to view enrollment details.
+          </p>
+          <button
+            onClick={() => {
+              window.location.href = "/login";
+            }}
+            className="rounded-xl bg-[#2563eb] px-8 py-4 font-bold shadow-xl shadow-blue-900/20 transition hover:scale-105"
+          >
+            Go to Login
+          </button>
+        </div>
+      </section>
+    );
   }
 
   return (
     <section
+      ref={ref}
       className="relative min-h-screen overflow-hidden bg-[#0f172a] font-sans text-slate-100"
     >
       {showUnpublishedPopup && (
@@ -278,12 +308,12 @@ export default function CoursePage({
         </div>
       )}
 
-      <motion.div className="absolute inset-0 -z-10">
+      <motion.div style={{ y }} className="absolute inset-0 -z-10">
         <div className="absolute left-1/2 top-0 h-[800px] w-[800px] -translate-x-1/2 rounded-full bg-gradient-to-r from-blue-500/15 via-blue-400/10 to-blue-500/15 blur-[120px]" />
         <div className="absolute bottom-0 right-0 h-[500px] w-[500px] rounded-full bg-pink-500/10 blur-[100px]" />
       </motion.div>
 
-      <div className="relative z-10 mx-auto max-w-6xl px-6 pb-32 pt-12 lg:pb-20">
+      <div className="relative z-10 mx-auto max-w-6xl px-6 pb-20 pt-24">
         {course?.isPublished === false && (
           <div className="mb-6 flex items-center gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-5 py-4">
             <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-amber-400" />
@@ -299,7 +329,7 @@ export default function CoursePage({
           whileInView={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
           viewport={{ once: true }}
-          className="mb-16 grid items-start gap-12 lg:grid-cols-12"
+          className="mb-16 grid items-center gap-12 lg:grid-cols-12"
         >
           <div className="lg:col-span-7">
             <h1 className="mb-6 bg-gradient-to-r from-white via-blue-100 to-blue-200 bg-clip-text text-5xl font-black leading-[1.05] tracking-tight text-transparent md:text-6xl">
@@ -388,12 +418,27 @@ export default function CoursePage({
                 </Link>
               )}
 
-              <Link href="/contact" className="rounded-xl border border-white/10 bg-white/5 px-8 py-4 backdrop-blur-md">
-                Ask about this course
-              </Link>
+              <button className="rounded-xl border border-white/10 bg-white/5 px-8 py-4 backdrop-blur-md">
+                Brochure
+              </button>
             </div>
 
-            <p className="mt-8 text-sm leading-6 text-slate-400">Have a question about the curriculum or learning format? Our team can help you choose.</p>
+            <div className="mt-10 flex items-center gap-6">
+              <div className="flex -space-x-3">
+                {[1, 2, 3, 4].map((i) => (
+                  <img
+                    key={i}
+                    src={`https://randomuser.me/api/portraits/men/${i}.jpg`}
+                    className="h-10 w-10 rounded-full border-2 border-black"
+                    alt=""
+                  />
+                ))}
+              </div>
+              <p className="text-sm text-gray-400">
+                Trusted by{" "}
+                <span className="font-bold text-white">15,000+ learners</span>
+              </p>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4 lg:col-span-5">
@@ -404,9 +449,9 @@ export default function CoursePage({
               {
                 icon: Shield,
                 label: "Exam",
-                val: course.exam,
+                val: String(course.exam || "Included").split(" ")[0],
               },
-            ].filter(stat => stat.val).map((stat, i) => (
+            ].map((stat, i) => (
               <motion.div
                 key={i}
                 whileHover={{ y: -8, scale: 1.05 }}
@@ -464,7 +509,7 @@ export default function CoursePage({
           {enrollment && (
             <div className="mt-6 rounded-2xl border border-blue-500/25 bg-blue-500/10 p-5">
               <h3 className="mb-2 text-lg font-bold text-blue-200">
-                Your learning workspace
+                Single Learning Path
               </h3>
               <p className="text-sm leading-6 text-slate-300">
                 Course details, enrollment records, reports, certificates, and
@@ -508,14 +553,13 @@ export default function CoursePage({
           <div className="lg:col-span-4">
             <div className="sticky top-24 space-y-6">
               <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-blue-500/10 to-blue-400/5 p-8 backdrop-blur-xl">
-                <h3 className="mb-3 text-sm">Course fees</h3>
+                <h3 className="mb-3 text-sm">Price</h3>
                 <p className="text-4xl font-bold">{selectedPrice}</p>
                 <p className="mt-2 text-xs font-bold uppercase tracking-widest text-slate-400">
                   {selectedLearningMode === "live"
                     ? "Live Training"
                     : "Self-Paced Learning"}
                 </p>
-                {enrollment ? <Link href="/student/batches" className="mt-5 block rounded-xl bg-blue-600 px-5 py-3 text-center text-sm font-semibold text-white">Open my learning</Link> : <button onClick={handleEnroll} disabled={course.isPublished === false} className="mt-5 w-full rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50">{course.isPublished === false ? "Enrollment coming soon" : "Enroll in this course"}</button>}
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
@@ -536,8 +580,6 @@ export default function CoursePage({
           </div>
         </div>
       </div>
-
-      <div className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-4 border-t border-slate-700 bg-slate-900 px-5 py-4 text-white lg:hidden"><div><p className="text-xs text-slate-400">{selectedLearningMode === "live" ? "Live training" : "Self-paced learning"}</p><p className="mt-1 text-lg font-semibold">{selectedPrice}</p></div>{enrollment ? <Link href="/student/batches" className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold">Open learning</Link> : <button onClick={handleEnroll} disabled={course.isPublished === false} className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold disabled:opacity-50">{course.isPublished === false ? "Coming soon" : "Enroll now"}</button>}</div>
 
       {showEnrollPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">

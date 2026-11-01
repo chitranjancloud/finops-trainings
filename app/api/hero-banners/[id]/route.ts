@@ -23,7 +23,7 @@ export async function PUT(req: Request, { params }: any) {
         displayOrder: Number(body.displayOrder) || 0,
         isActive: body.isActive !== false,
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     return NextResponse.json({

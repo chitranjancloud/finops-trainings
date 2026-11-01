@@ -1,8 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Keep verification builds separate from any active development server.
-  distDir: process.env.FINOPS_PREVIEW === "true" ? ".next-ui-preview" : process.env.S3_ISOLATED_BUILD === "true" ? ".next-s3-check" : ".next",
   reactStrictMode: false,
 
   eslint: {

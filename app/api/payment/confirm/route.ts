@@ -111,7 +111,7 @@ export async function POST(req: Request) {
           status: learningMode === "live" ? "Waiting For Batch Assignment" : "enrolled",
           createdAt: new Date(),
         },
-        { new: true, upsert: true }
+        { returnDocument: 'after', upsert: true }
       );
       payment.enrollmentId = String(enrollment._id);
     }

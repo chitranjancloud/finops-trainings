@@ -103,7 +103,7 @@ export async function POST(req: Request) {
           completedAt: new Date(),
         },
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
 
     // Return updated stats for this batch so the UI can refresh immediately

@@ -61,7 +61,7 @@ export const POST = withTenantContext(
             cancelReason,
           },
         },
-        { new: true }
+        { returnDocument: 'after' }
       );
 
       if (!updated) {

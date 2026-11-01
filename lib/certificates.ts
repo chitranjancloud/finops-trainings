@@ -143,7 +143,7 @@ export async function ensureSystemBadges(courseId = "") {
     const saved = await Badge.findOneAndUpdate(
       { badgeId: badge.badgeId },
       { ...badge, courseId: "", isSystem: true },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
     );
     badges.push(saved);
   }
@@ -166,7 +166,7 @@ export async function awardBadge(opts: {
       ...opts,
       earnedAt: new Date(),
     },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
+    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
   );
 }
 

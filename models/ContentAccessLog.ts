@@ -22,7 +22,7 @@ const ContentAccessLogSchema = new mongoose.Schema(
     deviceId: { type: String, default: "" },
     ipAddress: { type: String, default: "" },
     userAgent: { type: String, default: "" },
-    accessedAt: { type: Date, default: Date.now, index: true },
+    accessedAt: { type: Date, default: Date.now },
   },
   { timestamps: true }
 );

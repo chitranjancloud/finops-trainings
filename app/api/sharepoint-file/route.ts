@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { verifyTenantSession } from "@/lib/auth/tenantSession";
 import { connectDB } from "@/lib/mongodb";
 import { fetchSharePointFile } from "@/lib/sharepoint";
+import { directSharePointVideoEnabled, redirectSharePointVideoIfVideo } from "@/lib/video/sharePointDelivery";
 import {
   contentTypeFromName,
   findAuthorizedCourse,
@@ -94,6 +95,11 @@ export const GET = withTenantContext(async (req: Request) => {
         { success: false, message: "You do not have access to this SharePoint content." },
         { status: 403 }
       );
+    }
+
+    if (directSharePointVideoEnabled()) {
+      const response = await redirectSharePointVideoIfVideo(driveId, itemId);
+      if (response) return response;
     }
 
     const fileRes = await fetchSharePointFile(driveId, itemId, req.headers.get("range"));

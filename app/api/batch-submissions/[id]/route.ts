@@ -52,7 +52,7 @@ export async function PATCH(req: Request, { params }: any) {
     const submission = await AssessmentSubmission.findByIdAndUpdate(
       params.id,
       updateFields,
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!submission) {

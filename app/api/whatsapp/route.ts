@@ -74,7 +74,7 @@ export async function PUT(req: Request) {
     const updated = await WhatsAppInteraction.findByIdAndUpdate(
       body.id,
       { status: body.status || "new" },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     return NextResponse.json({ success: true, interaction: updated });
