@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { FaFacebookF, FaInstagram, FaLinkedinIn, FaTwitter, FaYoutube } from "react-icons/fa";
-import { ArrowRight, BadgeCheck, Mail, MapPin, Phone } from "lucide-react";
+import { ArrowRight, Mail, MapPin, Phone } from "lucide-react";
 
 const groups = [
   { title: "Company", links: [["About", "/about"],["Contact", "/contact"],["Partners", "/partners"],["Testimonials", "/#testimonials"],["Awards", "/#awards"]] },
@@ -34,11 +35,10 @@ export default function Footer() {
         <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr] mb-14">
           <div>
             <div className="flex items-center gap-3 mb-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#2563eb] to-[#7c3aed] shadow-[0_4px_20px_rgba(37,99,235,0.4)]">
-                <BadgeCheck size={20} className="text-white" />
-              </div>
               <div>
-                <h2 className="text-xl font-black text-white">FinOps Trainings</h2>
+                <Link href="/" className="inline-block">
+                  <Image src="/logo/logo.png" alt="FinOps Trainings" width={300} height={100} className="h-auto w-60" />
+                </Link>
                 <p className="eyebrow">Premium Technology Learning</p>
               </div>
             </div>

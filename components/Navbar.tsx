@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   Bell,
@@ -211,10 +212,14 @@ export default function Navbar() {
           href={user?.role === "admin" ? "/admin-page" : "/"}
           className="text-xl font-black tracking-tight flex-shrink-0 hover:opacity-90 transition-opacity"
         >
-          <span className="bg-gradient-to-r from-[#4d8bff] to-[#a78bfa] bg-clip-text text-transparent">
-            FinOps
-          </span>
-          <span className="text-white"> Trainings</span>
+          <Image
+            src="/logo/logo.png"
+            alt="FinOps Trainings"
+            width={300}
+            height={100}
+            priority
+            className="h-auto w-36 sm:w-48"
+          />
         </Link>
 
         {user?.role === "admin" && (
