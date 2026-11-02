@@ -1,12 +1,13 @@
 # Dependency security status
 
-Verified on 2026-11-01.
+Verified on 2026-11-02.
 
 ## Applied updates
 
 - Updated the npm lockfile with compatible security patches, including Axios 1.21.0, follow-redirects 1.16.2, form-data 4.0.6, Sharp 0.35.5, Zod 4.6.7, js-yaml 4.3.2, browserslist 4.29.5, baseline-browser-mapping 2.11.34, and brace-expansion 1.1.21 / 5.0.12.
 - Updated Next.js to 15.5.28 and Nodemailer to 10.3.1.
 - Required PostCSS >=8.5.23 and applied an override to replace Next.js's vulnerable pinned copy. The lockfile resolves PostCSS 8.5.32.
+- Required Mongoose >=9.11.4 and added patched minimum overrides for the affected transitive packages above. Refreshed stale lockfile entries that still referenced vulnerable versions despite newer packages being installed locally.
 
 ## Remaining advisory
 
@@ -24,4 +25,4 @@ Recheck the parent linting packages for compatible releases before updating. Avo
 - `npx tsc --noEmit --incremental false`: passed.
 - `npm run build`: passed with network access for Google Fonts. The build skips linting according to the existing Next.js configuration.
 
-Commit both package.json and package-lock.json together. A remote GitHub security dashboard needs the changes pushed and a fresh scan before its findings can change.
+Commit both package.json and package-lock.json together. The hosted deployment must install this lockfile and be redeployed, then rescanned, before its old dependency findings can change. Local package installation alone does not update the hosted application's dependency tree.
